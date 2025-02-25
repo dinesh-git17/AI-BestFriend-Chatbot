@@ -1,16 +1,29 @@
 "use client";
-export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic"; // Ensure SSR for dynamic updates
+
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { FaPaperPlane, FaRobot } from "react-icons/fa";
 
 export default function Home() {
-  const [messages, setMessages] = useState<{ sender: string; text: string }[]>([
-    {
-      sender: "Echo",
-      text: "Hey there! 😊 I'm Echo, your AI best friend. I'm here to chat, listen, and support you anytime! 💙",
-    },
-  ]);
+  const [messages, setMessages] = useState<{ sender: string; text: string }[]>(
+    () => {
+      // Load messages from localStorage or start with a welcome message
+      if (typeof window !== "undefined") {
+        const savedMessages = localStorage.getItem("chatHistory");
+        return savedMessages
+          ? JSON.parse(savedMessages)
+          : [
+              {
+                sender: "Echo",
+                text: "Hey there! 😊 I'm Echo, your AI best friend. I'm here to chat, listen, and support you anytime! 💙",
+              },
+            ];
+      }
+      return [];
+    }
+  );
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -22,6 +35,13 @@ export default function Home() {
         top: chatContainerRef.current.scrollHeight,
         behavior: "smooth",
       });
+    }
+  }, [messages]);
+
+  // Save messages to localStorage whenever they change
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("chatHistory", JSON.stringify(messages));
     }
   }, [messages]);
 
@@ -53,9 +73,19 @@ export default function Home() {
     setLoading(false);
   };
 
+  // Function to manually reset chat (if needed)
+  const clearChat = () => {
+    setMessages([
+      {
+        sender: "Echo",
+        text: "Hey there! 😊 I'm Echo, your AI best friend. I'm here to chat, listen, and support you anytime! 💙",
+      },
+    ]);
+    localStorage.removeItem("chatHistory");
+  };
+
   return (
     <section className="relative w-full h-screen flex flex-col bg-[#0F0F1A] text-white font-poppins overflow-hidden">
-      {/* Fixed Header (Welcoming & Subtle) */}
       {/* Fixed Header (Welcoming & Subtle) */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -78,7 +108,7 @@ export default function Home() {
           {/* Chat Messages (Scrollable & No Overflow) */}
           <div
             ref={chatContainerRef}
-            className="flex-grow h-[calc(100vh-20rem)] overflow-y-auto overflow-x-hidden space-y-1 scrollbar-thin scrollbar-track-[#1e1e2e] scrollbar-thumb-[#6a11cb] scrollbar-thumb-rounded-full p-2 pr-3"
+            className="flex-grow h-[calc(100vh-20rem)] overflow-y-auto overflow-x-hidden space-y-3 scrollbar-thin scrollbar-track-[#1e1e2e] scrollbar-thumb-[#6a11cb] scrollbar-thumb-rounded-full p-2 pr-3"
           >
             {messages.map((msg, index) => (
               <motion.div
@@ -134,6 +164,12 @@ export default function Home() {
                 <FaPaperPlane className="text-lg" />
               </motion.button>
             </div>
+            <button
+              onClick={clearChat}
+              className="mt-3 text-sm text-gray-400 hover:text-white transition"
+            >
+              Start a new chat
+            </button>
           </div>
         </div>
       </div>
