@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes gradientMove {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.bg-animated {
+  background: linear-gradient(-45deg, #1e1e2e, #0f0f1a, #181824, #252532);
+  background-size: 300% 300%;
+  animation: gradientMove 10s ease infinite;
+}
+
+/* Hide horizontal scrollbar */
+html,
+body {
+  overflow-x: hidden;
+}
+
+/* Custom sleek scrollbar */
+::-webkit-scrollbar {
+  width: 6px; /* Thin scrollbar */
+}
+
+::-webkit-scrollbar-track {
+  background: #1e1e2e; /* Matches the chat background */
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    to bottom,
+    #8b5cf6,
+    #ec4899,
+    #3b82f6
+  ); /* Purple-Pink-Blue */
+  border-radius: 10px;
+  transition: all 0.3s ease-in-out;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    to bottom,
+    #a855f7,
+    #f472b6,
+    #60a5fa
+  ); /* Lighter on hover */
+}
+
+@keyframes subtle-glow {
+  0% {
+    text-shadow: 0 0 6px rgba(167, 139, 250, 0.4);
+  }
+  50% {
+    text-shadow: 0 0 10px rgba(244, 114, 182, 0.5);
+  }
+  100% {
+    text-shadow: 0 0 6px rgba(167, 139, 250, 0.4);
+  }
+}
+
+.animate-subtle-glow {
+  animation: subtle-glow 4s ease-in-out infinite alternate;
+}
