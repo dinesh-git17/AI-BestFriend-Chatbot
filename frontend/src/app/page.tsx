@@ -12,6 +12,8 @@ import {
   FaMoon,
 } from "react-icons/fa";
 
+import { FiEdit, FiTrash, FiCheck } from "react-icons/fi";
+
 // Voice Recognition Support
 declare global {
   interface Window {
@@ -122,6 +124,8 @@ export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [typing, setTyping] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editedMessage, setEditedMessage] = useState("");
 
   useEffect(() => {
     setIsClient(true);
@@ -296,6 +300,28 @@ export default function Home() {
     localStorage.removeItem("chatHistory");
   };
 
+  const handleEditMessage = (index: number) => {
+    setEditingMessageId(index.toString()); // Store the message ID being edited
+    setEditedMessage(messages[index].text); // Pre-fill input with existing message text
+  };
+
+  const handleSaveEdit = (index: number) => {
+    if (!editedMessage.trim()) return; // Prevent empty messages
+
+    setMessages((prev) =>
+      prev.map((msg, i) =>
+        i === index ? { ...msg, text: editedMessage } : msg
+      )
+    );
+
+    setEditingMessageId(null); // Exit edit mode
+    setEditedMessage("");
+  };
+
+  const handleDeleteMessage = (index: number) => {
+    setMessages((prev) => prev.filter((_, i) => i !== index));
+  };
+
   return (
     <section className="relative w-full h-screen flex flex-col items-center justify-center bg-[#0F0F1A] text-white font-poppins overflow-hidden">
       {/* Dark Mode Toggle */}
@@ -334,7 +360,7 @@ export default function Home() {
 
       {/* Chatbox Wrapper - Adjusted to Fit More Space */}
       <div
-        className="w-full max-w-5xl bg-custom bg-opacity-80 backdrop-blur-lg p-6 rounded-xl shadow-lg flex flex-col border border-purple-500/50 hover:border-purple-400 transition mx-auto"
+        className="w-full max-w-5xl bg-custom bg-opacity-80 backdrop-blur-lg p-6 rounded-xl shadow-lg flex flex-col border border-purple-500/50 hover:border-purple-600 transition mx-auto"
         style={{
           height: "calc(100vh - 6rem)", // ✅ Adjusted dynamically to match the smaller title
           maxHeight: "80vh", // ✅ Prevents overflow
@@ -351,14 +377,56 @@ export default function Home() {
           {messages.map((msg, index) => (
             <motion.div
               key={index}
-              initial={{ opacity: 0, y: 10, scale: 0.95 }} // 🔹 Starts slightly lower & smaller
-              animate={{ opacity: 1, y: 0, scale: 1 }} // 🔹 Smoothly fades in & pops
-              exit={{ opacity: 0, y: -10, scale: 0.9 }} // 🔹 Disappears smoothly when removed
-              transition={{ duration: 0.3, ease: "easeOut" }} // 🔹 Quick but fluid animation
-              className={`flex gap-2 ${
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.9 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className={`flex gap-2 items-center ${
                 msg.sender === "You" ? "justify-end" : "justify-start"
-              } items-center`}
+              }`}
             >
+              {/* Buttons for User Messages - Only if Sender is "You" */}
+              {msg.sender === "You" && (
+                <div className="flex items-center gap-1 opacity-0 hover:opacity-100 transition-opacity duration-300">
+                  {editingMessageId === index.toString() ? (
+                    <motion.button
+                      onClick={() => handleSaveEdit(index)}
+                      whileHover={{ scale: 1.15 }}
+                      whileTap={{ scale: 0.9 }}
+                      className="p-1.5 rounded-lg transition duration-300"
+                    >
+                      <FiCheck
+                        className="text-gray-400 hover:text-green-400 transition duration-300"
+                        size={16}
+                      />
+                    </motion.button>
+                  ) : (
+                    <motion.button
+                      onClick={() => handleEditMessage(index)}
+                      whileHover={{ scale: 1.15 }}
+                      whileTap={{ scale: 0.9 }}
+                      className="p-1.5 rounded-lg transition duration-300"
+                    >
+                      <FiEdit
+                        className="text-gray-400 hover:text-yellow-400 transition duration-300"
+                        size={16}
+                      />
+                    </motion.button>
+                  )}
+                  <motion.button
+                    onClick={() => handleDeleteMessage(index)}
+                    whileHover={{ scale: 1.15 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="p-1.5 rounded-lg transition duration-300"
+                  >
+                    <FiTrash
+                      className="text-gray-400 hover:text-red-400 transition duration-300"
+                      size={16}
+                    />
+                  </motion.button>
+                </div>
+              )}
+
               {/* AI Avatar (Only for Echo) */}
               {msg.sender !== "You" && (
                 <div className="w-8 h-8 flex items-center justify-center rounded-full bg-[#3b82f6] text-white text-lg">
@@ -374,7 +442,19 @@ export default function Home() {
                     : "bg-[#252532] text-gray-300 shadow-lg shadow-blue-500/10"
                 }`}
               >
-                <p>{msg.text}</p>
+                {editingMessageId === index.toString() ? (
+                  <input
+                    type="text"
+                    value={editedMessage}
+                    onChange={(e) => setEditedMessage(e.target.value)}
+                    className="w-full bg-transparent text-white outline-none border-b border-gray-400 p-1"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSaveEdit(index);
+                    }}
+                  />
+                ) : (
+                  <p>{msg.text}</p>
+                )}
               </div>
             </motion.div>
           ))}
