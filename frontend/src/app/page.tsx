@@ -4,13 +4,7 @@ export const dynamic = "force-dynamic"; // Ensure SSR for dynamic updates
 import { useState, useEffect, useRef } from "react";
 import PersonalitySelector from "@/components/PersonalitySelector";
 import { motion } from "framer-motion";
-import {
-  FaPaperPlane,
-  FaRobot,
-  FaMicrophone,
-  FaSun,
-  FaMoon,
-} from "react-icons/fa";
+import { FaPaperPlane, FaRobot, FaMicrophone, FaSun, FaMoon } from "react-icons/fa";
 
 import { FiEdit, FiTrash, FiCheck } from "react-icons/fi";
 
@@ -51,19 +45,13 @@ declare global {
 }
 
 export default function Home() {
-  const [messages, setMessages] = useState<{ sender: string; text: string }[]>(
-    []
-  );
+  const [messages, setMessages] = useState<{ sender: string; text: string }[]>([]);
 
   // ✅ Place this function inside Home() (below useEffect)
-  const startVoiceRecognition = (
-    setInput: (value: string) => void,
-    currentInput: string
-  ) => {
+  const startVoiceRecognition = (setInput: (value: string) => void, currentInput: string) => {
     if (!isClient) return; // Prevents SSR issues
 
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       alert("Voice recognition is not supported in this browser.");
@@ -81,9 +69,7 @@ export default function Home() {
     };
 
     // ✅ Type guard to check if event is a SpeechRecognitionErrorEvent
-    function isSpeechRecognitionErrorEvent(
-      event: Event
-    ): event is SpeechRecognitionErrorEvent {
+    function isSpeechRecognitionErrorEvent(event: Event): event is SpeechRecognitionErrorEvent {
       return "error" in event;
     }
 
@@ -103,11 +89,7 @@ export default function Home() {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    return hour < 12
-      ? "Good morning!"
-      : hour < 18
-      ? "Good afternoon!"
-      : "Good evening!";
+    return hour < 12 ? "Good morning!" : hour < 18 ? "Good afternoon!" : "Good evening!";
   };
 
   // Ensure localStorage is only accessed on the client
@@ -123,7 +105,7 @@ export default function Home() {
                 sender: "Echo",
                 text: `${getGreeting()} 😊 I'm Echo, your AI best friend. I'm here to chat, listen, and support you anytime! 💙`,
               },
-            ]
+            ],
       );
     }
   }, []);
@@ -167,10 +149,7 @@ export default function Home() {
   // Toggle dark mode
   useEffect(() => {
     if (typeof document !== "undefined") {
-      document.documentElement.setAttribute(
-        "data-theme",
-        darkMode ? "dark" : "light"
-      );
+      document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
     }
   }, [darkMode]);
 
@@ -274,9 +253,7 @@ export default function Home() {
     if (!editedMessage.trim()) return; // Prevent empty messages
 
     setMessages((prev) =>
-      prev.map((msg, i) =>
-        i === index ? { ...msg, text: editedMessage } : msg
-      )
+      prev.map((msg, i) => (i === index ? { ...msg, text: editedMessage } : msg)),
     );
 
     setEditingMessageId(null); // Exit edit mode
@@ -293,7 +270,7 @@ export default function Home() {
       <button
         onClick={() => setDarkMode((prev) => !prev)}
         className="fixed top-6 right-6 z-[60] bg-gray-800 p-1 rounded-full hover:bg-gray-700 transition shadow-lg"
-        style={{ transform: "translateY(15px)" }} // ✅ Moves it slightly down
+        style={{ transform: "translateY(15px)" }}
       >
         {darkMode ? (
           <FaSun className="text-yellow-400 text-m" />
@@ -302,7 +279,7 @@ export default function Home() {
         )}
       </button>
 
-      {/* Title Section - Reduced Size */}
+      {/* Title Section */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -323,21 +300,19 @@ export default function Home() {
         </p>
       </motion.div>
 
-      {/* Chatbox Wrapper - Adjusted to Fit More Space */}
+      {/* Chatbox Wrapper - Adjusted Height to Avoid Touching Title */}
       <div
-        className="w-full max-w-5xl bg-custom bg-opacity-80 backdrop-blur-lg p-6 rounded-xl shadow-lg flex flex-col border border-purple-500/50 hover:border-purple-600 transition mx-auto"
+        className="flex flex-col flex-grow w-full max-w-5xl bg-custom bg-opacity-80 backdrop-blur-lg p-6 rounded-xl shadow-lg border border-purple-500/50 hover:border-purple-600 transition mx-auto mt-[8rem] mb-6"
         style={{
-          height: "calc(100vh - 6rem)", // ✅ Adjusted dynamically to match the smaller title
-          maxHeight: "80vh", // ✅ Prevents overflow
-          minHeight: "600px", // ✅ Ensures proper structure
-          marginTop: "6rem", // ✅ Moves the chatbox higher
+          minHeight: "60vh",
+          maxHeight: "80vh", // ✅ Adjusted to prevent bottom overflow
+          height: "calc(100vh - 10rem)", // ✅ Added extra space at bottom
         }}
       >
-        {/* Chat Messages - Prevents Overflow & Keeps Messages Inside */}
+        {/* Chat Messages */}
         <div
           ref={chatContainerRef}
           className="flex flex-col justify-start flex-grow overflow-y-auto space-y-3 p-3 scrollbar-thin scrollbar-track-[#1e1e2e] scrollbar-thumb-[#6a11cb] scrollbar-thumb-rounded-full w-full"
-          style={{ maxHeight: "100%" }} // ✅ Ensures messages don't push outside the card
         >
           {messages.map((msg, index) => (
             <motion.div
@@ -350,7 +325,7 @@ export default function Home() {
                 msg.sender === "You" ? "justify-end" : "justify-start"
               }`}
             >
-              {/* Buttons for User Messages - Only if Sender is "You" */}
+              {/* Edit & Delete Buttons for User Messages */}
               {msg.sender === "You" && (
                 <div className="flex items-center gap-1 opacity-0 hover:opacity-100 transition-opacity duration-300">
                   {editingMessageId === index.toString() ? (
@@ -392,13 +367,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* AI Avatar (Only for Echo) */}
-              {msg.sender !== "You" && (
-                <div className="w-8 h-8 flex items-center justify-center rounded-full bg-[#3b82f6] text-white text-lg">
-                  🤖
-                </div>
-              )}
-
               {/* Message Bubble */}
               <div
                 className={`px-4 py-3 rounded-2xl shadow-lg max-w-[75%] text-base leading-relaxed ${
@@ -407,24 +375,12 @@ export default function Home() {
                     : "bg-[#252532] text-gray-300 shadow-lg shadow-blue-500/10"
                 }`}
               >
-                {editingMessageId === index.toString() ? (
-                  <input
-                    type="text"
-                    value={editedMessage}
-                    onChange={(e) => setEditedMessage(e.target.value)}
-                    className="w-full bg-transparent text-white outline-none border-b border-gray-400 p-1"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleSaveEdit(index);
-                    }}
-                  />
-                ) : (
-                  <p>{msg.text}</p>
-                )}
+                <p>{msg.text}</p>
               </div>
             </motion.div>
           ))}
 
-          {/* ✅ Echo is Typing Animation */}
+          {/* Echo is Typing Indicator */}
           {typing && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -436,12 +392,9 @@ export default function Home() {
               }}
               className="flex items-center gap-2 text-gray-400 italic self-start"
             >
-              {/* AI Avatar */}
               <div className="w-8 h-8 flex items-center justify-center rounded-full bg-[#3b82f6] text-white text-lg">
                 🤖
               </div>
-
-              {/* Typing Indicator */}
               <div className="px-4 py-2 rounded-2xl shadow-lg max-w-fit bg-[#252532] text-gray-300">
                 Echo is typing...
               </div>
@@ -450,7 +403,7 @@ export default function Home() {
         </div>
 
         {/* Chat Input Section */}
-        <div className="w-full mt-4 pb-2 flex items-center bg-[#252532] rounded-lg shadow-md border border-gray-600 px-3 py-2">
+        <div className="w-full mt-4 pb-2 flex items-center bg-[#252532] rounded-lg shadow-md border border-gray-600 px-3 py-2 min-h-[3rem] md:min-h-[4rem]">
           <button
             onClick={() => startVoiceRecognition(setInput, input)}
             className="p-3 bg-gray-700 rounded-full mr-2 hover:bg-gray-600"
@@ -478,18 +431,15 @@ export default function Home() {
             <FaPaperPlane className="text-lg text-white" />
           </motion.button>
         </div>
+
+        {/* Bottom Section - Personality Selector & Clear Chat */}
         <div className="flex items-center w-full px-3 mt-4">
-          {/* ✅ Move Personality Selector Further Left */}
           <div className="w-[30%] transform -translate-x-4">
             <PersonalitySelector
               personality={personality}
               setPersonality={(newPersonality: string) => {
                 setPersonality(
-                  newPersonality as
-                    | "Friendly"
-                    | "Funny"
-                    | "Professional"
-                    | "Supportive"
+                  newPersonality as "Friendly" | "Funny" | "Professional" | "Supportive",
                 );
 
                 const personalityResponses: Record<string, string> = {
@@ -503,19 +453,13 @@ export default function Home() {
                     "💙 I'm here to listen, encourage, and support you! Whatever you're going through, I'm here to help. 🤗",
                 };
 
-                if (
-                  personalityResponses[
-                    newPersonality as keyof typeof personalityResponses
-                  ]
-                ) {
+                if (personalityResponses[newPersonality as keyof typeof personalityResponses]) {
                   setMessages((prev) => [
                     ...prev,
                     {
                       sender: "Echo",
                       text: `✨ You've switched to ${newPersonality} mode! ${
-                        personalityResponses[
-                          newPersonality as keyof typeof personalityResponses
-                        ]
+                        personalityResponses[newPersonality as keyof typeof personalityResponses]
                       }`,
                     },
                   ]);
@@ -523,15 +467,11 @@ export default function Home() {
               }}
             />
           </div>
-
           <motion.span
             onClick={clearChat}
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
-            className="text-xs text-gray-400 cursor-pointer opacity-80 hover:underline transition-all"
-            style={{
-              marginLeft: "auto", // Aligns to the right
-            }}
+            className="text-xs text-gray-400 cursor-pointer opacity-80 hover:underline transition-all ml-auto"
           >
             Clear Chat
           </motion.span>
