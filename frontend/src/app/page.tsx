@@ -334,7 +334,7 @@ export default function Home() {
 
       {/* Chatbox Wrapper - Adjusted to Fit More Space */}
       <div
-        className="w-full max-w-2xl bg-custom bg-opacity-80 backdrop-blur-lg p-6 rounded-xl shadow-lg flex flex-col border border-purple-500/50 hover:border-purple-600 transition"
+        className="w-full max-w-5xl bg-custom bg-opacity-80 backdrop-blur-lg p-6 rounded-xl shadow-lg flex flex-col border border-purple-500/50 hover:border-purple-400 transition mx-auto"
         style={{
           height: "calc(100vh - 6rem)", // ✅ Adjusted dynamically to match the smaller title
           maxHeight: "80vh", // ✅ Prevents overflow
@@ -345,7 +345,7 @@ export default function Home() {
         {/* Chat Messages - Prevents Overflow & Keeps Messages Inside */}
         <div
           ref={chatContainerRef}
-          className="flex flex-col justify-start flex-grow overflow-y-auto space-y-3 p-3 scrollbar-thin scrollbar-track-[#1e1e2e] scrollbar-thumb-[#6a11cb] scrollbar-thumb-rounded-full"
+          className="flex flex-col justify-start flex-grow overflow-y-auto space-y-3 p-3 scrollbar-thin scrollbar-track-[#1e1e2e] scrollbar-thumb-[#6a11cb] scrollbar-thumb-rounded-full w-full"
           style={{ maxHeight: "100%" }} // ✅ Ensures messages don't push outside the card
         >
           {messages.map((msg, index) => (
@@ -438,7 +438,44 @@ export default function Home() {
           <div className="w-[30%] transform -translate-x-4">
             <PersonalitySelector
               personality={personality}
-              setPersonality={setPersonality}
+              setPersonality={(newPersonality: string) => {
+                setPersonality(
+                  newPersonality as
+                    | "Friendly"
+                    | "Funny"
+                    | "Professional"
+                    | "Supportive"
+                );
+
+                const personalityResponses: Record<string, string> = {
+                  Friendly:
+                    "😊 I'm feeling extra warm and welcoming! Let's have a fun, friendly chat with lots of positive vibes. 💙",
+                  Funny:
+                    "😂 Get ready for some jokes and witty comebacks! I'll keep the chat lighthearted and fun. 😆",
+                  Professional:
+                    "💼 I'm now in professional mode! Expect clear, concise, and informative responses—like a reliable assistant at your service. 📊",
+                  Supportive:
+                    "💙 I'm here to listen, encourage, and support you! Whatever you're going through, I'm here to help. 🤗",
+                };
+
+                if (
+                  personalityResponses[
+                    newPersonality as keyof typeof personalityResponses
+                  ]
+                ) {
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      sender: "Echo",
+                      text: `✨ You've switched to ${newPersonality} mode! ${
+                        personalityResponses[
+                          newPersonality as keyof typeof personalityResponses
+                        ]
+                      }`,
+                    },
+                  ]);
+                }
+              }}
             />
           </div>
 
