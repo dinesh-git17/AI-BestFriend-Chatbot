@@ -4,6 +4,8 @@ from backend.chatbot_gpt import Chatbot
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+import os
+from openai import OpenAI
 
 app = FastAPI()
 
@@ -24,6 +26,10 @@ app.add_middleware(
 async def preflight_handler():
     return JSONResponse(content={}, status_code=200)
 
+
+# Load OpenAI API Key from Environment Variables
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 bot = Chatbot()
 
