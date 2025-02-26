@@ -50,41 +50,6 @@ declare global {
   }
 }
 
-export const startVoiceRecognition = (
-  setInput: (value: string) => void,
-  currentInput: string
-) => {
-  if (typeof window !== "undefined") {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      alert("Voice recognition is not supported in this browser.");
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const transcript = event.results[0][0].transcript;
-
-      // Fix: Concatenate transcript with current input and update it
-      setInput(currentInput + " " + transcript);
-    };
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error("Speech recognition error:", event.error);
-    };
-
-    recognition.start();
-  } else {
-    alert("Voice recognition is not supported in this browser.");
-  }
-};
-
 export default function Home() {
   const [messages, setMessages] = useState<{ sender: string; text: string }[]>(
     []
