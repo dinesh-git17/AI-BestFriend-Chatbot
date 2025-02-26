@@ -88,17 +88,27 @@ export default function Home() {
     []
   );
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    return hour < 12
+      ? "Good morning!"
+      : hour < 18
+      ? "Good afternoon!"
+      : "Good evening!";
+  };
+
   // Ensure localStorage is only accessed on the client
   useEffect(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("chatHistory");
+
       setMessages(
         saved
           ? JSON.parse(saved)
           : [
               {
                 sender: "Echo",
-                text: "Hey there! 😊 I'm Echo, your AI best friend. I'm here to chat, listen, and support you anytime! 💙",
+                text: `${getGreeting()} 😊 I'm Echo, your AI best friend. I'm here to chat, listen, and support you anytime! 💙`,
               },
             ]
       );
@@ -109,11 +119,16 @@ export default function Home() {
   const [darkMode, setDarkMode] = useState(true);
   const [personality, setPersonality] = useState("Friendly");
   const chatContainerRef = useRef<HTMLDivElement>(null); // ✅ Add error state for network errors
-
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [typing, setTyping] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    inputRef.current?.focus();
   }, []);
 
   // ✅ Place this function inside Home() (below useEffect)
@@ -182,7 +197,10 @@ export default function Home() {
   // Toggle dark mode
   useEffect(() => {
     if (typeof document !== "undefined") {
-      document.documentElement.classList.toggle("light-mode", !darkMode);
+      document.documentElement.setAttribute(
+        "data-theme",
+        darkMode ? "dark" : "light"
+      );
     }
   }, [darkMode]);
 
@@ -192,6 +210,7 @@ export default function Home() {
 
     setMessages((prev) => [...prev, { sender: "You", text: textToSend }]);
     setInput("");
+    setTyping(true); // ✅ Show "Echo is typing..." before fetching
 
     // ✅ Prevent multiple error messages by checking the last Echo message
     const lastMessage = messages[messages.length - 1]?.text || "";
@@ -199,6 +218,7 @@ export default function Home() {
 
     // ✅ Check if the user is offline and immediately show ONE error message
     if (!navigator.onLine) {
+      setTyping(false); // ✅ Remove typing indicator
       if (!alreadyHasError) {
         setMessages((prev) => [
           ...prev,
@@ -216,6 +236,7 @@ export default function Home() {
     const timeout = setTimeout(() => {
       timeoutTriggered = true;
       controller.abort(); // ✅ Cancel the request if it's taking too long
+      setTyping(false); // ✅ Remove typing indicator
       if (!alreadyHasError) {
         setMessages((prev) => [
           ...prev,
@@ -242,10 +263,12 @@ export default function Home() {
       clearTimeout(timeout); // ✅ Clear timeout if response arrives in time
 
       const data = await response.json();
+      setTyping(false); // ✅ Remove typing indicator
       setMessages((prev) => [...prev, { sender: "Echo", text: data.response }]);
     } catch (error) {
       console.error("Error sending message:", error);
 
+      setTyping(false); // ✅ Remove typing indicator
       // ✅ Ensure only ONE error message appears & avoid sending both timeout and fetch errors
       if (!alreadyHasError && !timeoutTriggered) {
         setMessages((prev) => [
@@ -258,14 +281,18 @@ export default function Home() {
     }
   };
 
-  // Function to manually reset chat
   const clearChat = () => {
+    const greetingMessage = `${getGreeting()} 😊 I'm Echo, your AI best friend. I'm here to chat, listen, and support you anytime! 💙`;
+
+    console.log("Clearing chat with greeting:", greetingMessage); // ✅ Debugging log
+
     setMessages([
       {
         sender: "Echo",
-        text: "Hey there! 😊 I'm Echo, your AI best friend. I'm here to chat, listen, and support you anytime! 💙",
+        text: greetingMessage,
       },
     ]);
+
     localStorage.removeItem("chatHistory");
   };
 
@@ -274,12 +301,13 @@ export default function Home() {
       {/* Dark Mode Toggle */}
       <button
         onClick={() => setDarkMode((prev) => !prev)}
-        className="absolute top-4 right-6 z-50 bg-gray-800 p-2 rounded-full hover:bg-gray-700 transition"
+        className="fixed top-6 right-6 z-[60] bg-gray-800 p-1 rounded-full hover:bg-gray-700 transition shadow-lg"
+        style={{ transform: "translateY(15px)" }} // ✅ Moves it slightly down
       >
         {darkMode ? (
-          <FaSun className="text-yellow-400" />
+          <FaSun className="text-yellow-400 text-m" />
         ) : (
-          <FaMoon className="text-gray-300" />
+          <FaMoon className="text-gray-300 text-m" />
         )}
       </button>
 
@@ -306,7 +334,7 @@ export default function Home() {
 
       {/* Chatbox Wrapper - Adjusted to Fit More Space */}
       <div
-        className="w-full max-w-2xl bg-[#1e1e2e] p-6 rounded-xl shadow-lg flex flex-col border border-gray-700"
+        className="w-full max-w-2xl bg-[#1e1e2e] bg-opacity-80 backdrop-blur-lg p-6 rounded-xl shadow-lg flex flex-col border border-purple-500/50 hover:border-purple-400 transition"
         style={{
           height: "calc(100vh - 6rem)", // ✅ Adjusted dynamically to match the smaller title
           maxHeight: "80vh", // ✅ Prevents overflow
@@ -350,6 +378,30 @@ export default function Home() {
               </div>
             </motion.div>
           ))}
+
+          {/* ✅ Echo is Typing Animation */}
+          {typing && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{
+                duration: 0.5,
+                repeat: Infinity,
+                repeatType: "reverse",
+              }}
+              className="flex items-center gap-2 text-gray-400 italic self-start"
+            >
+              {/* AI Avatar */}
+              <div className="w-8 h-8 flex items-center justify-center rounded-full bg-[#3b82f6] text-white text-lg">
+                🤖
+              </div>
+
+              {/* Typing Indicator */}
+              <div className="px-4 py-2 rounded-2xl shadow-lg max-w-fit bg-[#252532] text-gray-300">
+                Echo is typing...
+              </div>
+            </motion.div>
+          )}
         </div>
 
         {/* Chat Input Section */}
@@ -361,6 +413,7 @@ export default function Home() {
             <FaMicrophone className="text-white" />
           </button>
           <input
+            ref={inputRef}
             type="text"
             className="flex-grow p-3 text-white bg-transparent outline-none text-base placeholder-gray-400"
             placeholder="Type a message..."

@@ -71,3 +71,13 @@ body {
 .animate-subtle-glow {
   animation: subtle-glow 4s ease-in-out infinite alternate;
 }
+
+[data-theme="dark"] {
+  background-color: #0f0f1a;
+  color: white;
+}
+
+[data-theme="light"] {
+  background-color: #f4f4f4;
+  color: black;
+}
