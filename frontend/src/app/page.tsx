@@ -90,52 +90,6 @@ export default function Home() {
     []
   );
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    return hour < 12
-      ? "Good morning!"
-      : hour < 18
-      ? "Good afternoon!"
-      : "Good evening!";
-  };
-
-  // Ensure localStorage is only accessed on the client
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("chatHistory");
-
-      setMessages(
-        saved
-          ? JSON.parse(saved)
-          : [
-              {
-                sender: "Echo",
-                text: `${getGreeting()} 😊 I'm Echo, your AI best friend. I'm here to chat, listen, and support you anytime! 💙`,
-              },
-            ]
-      );
-    }
-  }, []);
-
-  const [input, setInput] = useState("");
-  const [darkMode, setDarkMode] = useState(true);
-  const [personality, setPersonality] = useState("Friendly");
-  const chatContainerRef = useRef<HTMLDivElement>(null); // ✅ Add error state for network errors
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [typing, setTyping] = useState(false);
-  const [isClient, setIsClient] = useState(false);
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [editedMessage, setEditedMessage] = useState("");
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
   // ✅ Place this function inside Home() (below useEffect)
   const startVoiceRecognition = (
     setInput: (value: string) => void,
@@ -181,6 +135,52 @@ export default function Home() {
 
     recognition.start();
   };
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    return hour < 12
+      ? "Good morning!"
+      : hour < 18
+      ? "Good afternoon!"
+      : "Good evening!";
+  };
+
+  // Ensure localStorage is only accessed on the client
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("chatHistory");
+
+      setMessages(
+        saved
+          ? JSON.parse(saved)
+          : [
+              {
+                sender: "Echo",
+                text: `${getGreeting()} 😊 I'm Echo, your AI best friend. I'm here to chat, listen, and support you anytime! 💙`,
+              },
+            ]
+      );
+    }
+  }, []);
+
+  const [input, setInput] = useState("");
+  const [darkMode, setDarkMode] = useState(true);
+  const [personality, setPersonality] = useState("Friendly");
+  const chatContainerRef = useRef<HTMLDivElement>(null); // ✅ Add error state for network errors
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [typing, setTyping] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editedMessage, setEditedMessage] = useState("");
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   // Auto-scroll to latest message smoothly
   useEffect(() => {
