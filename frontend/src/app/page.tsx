@@ -126,6 +126,7 @@ export default function Home() {
   const [isClient, setIsClient] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editedMessage, setEditedMessage] = useState("");
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   useEffect(() => {
     setIsClient(true);
@@ -253,11 +254,10 @@ export default function Home() {
     }, 3000); // ✅ Faster timeout (3 seconds)
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/chat/", {
+      const response = await fetch(`${API_URL}/chat/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_input: textToSend, personality }),
-        signal: controller.signal, // ✅ Connect the request to the AbortController
       });
 
       if (!response.ok) {
