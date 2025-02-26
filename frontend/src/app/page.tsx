@@ -5,8 +5,8 @@ import { useState, useEffect, useRef } from "react";
 import PersonalitySelector from "@/components/PersonalitySelector";
 import { motion } from "framer-motion";
 import { FaPaperPlane, FaRobot, FaMicrophone, FaSun, FaMoon } from "react-icons/fa";
-
 import { FiEdit, FiTrash, FiCheck } from "react-icons/fi";
+import MobileChat from "@/components/MobileChat";
 
 // Voice Recognition Support
 declare global {
@@ -46,6 +46,18 @@ declare global {
 
 export default function Home() {
   const [messages, setMessages] = useState<{ sender: string; text: string }[]>([]);
+
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkScreenSize(); // Run on mount
+    window.addEventListener("resize", checkScreenSize);
+    return () => window.removeEventListener("resize", checkScreenSize);
+  }, []);
 
   // ✅ Place this function inside Home() (below useEffect)
   const startVoiceRecognition = (setInput: (value: string) => void, currentInput: string) => {
@@ -264,7 +276,27 @@ export default function Home() {
     setMessages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  return (
+  return isMobile ? (
+    <MobileChat
+      messages={messages}
+      setMessages={setMessages}
+      input={input}
+      setInput={setInput}
+      sendMessage={sendMessage}
+      clearChat={clearChat}
+      personality={personality}
+      setPersonality={setPersonality}
+      startVoiceRecognition={startVoiceRecognition}
+      editingMessageId={editingMessageId}
+      setEditingMessageId={setEditingMessageId}
+      editedMessage={editedMessage}
+      setEditedMessage={setEditedMessage}
+      handleEditMessage={handleEditMessage}
+      handleSaveEdit={handleSaveEdit}
+      handleDeleteMessage={handleDeleteMessage}
+      typing={typing}
+    />
+  ) : (
     <section className="relative w-full h-screen flex flex-col items-center justify-center bg-[#0F0F1A] text-white font-poppins overflow-hidden">
       {/* Dark Mode Toggle */}
       <button
