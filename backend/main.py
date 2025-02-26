@@ -13,8 +13,9 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://192.168.68.102:3000"
-    ],  # Update this to match your frontend URL
+        "http://192.168.68.102:3000",
+        "https://ai-best-friend-chatbot.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
