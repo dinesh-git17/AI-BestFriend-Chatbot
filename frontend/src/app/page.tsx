@@ -216,7 +216,7 @@ export default function Home() {
           },
         ]);
       }
-    }, 3000); // ✅ Faster timeout (3 seconds)
+    }, 5000); // ✅ Faster timeout (5 seconds)
 
     try {
       const response = await fetch(`${API_URL}/chat/`, {
