@@ -173,6 +173,21 @@ export default function Home() {
     setInput("");
     setTyping(true); // ✅ Show "Echo is typing..." before fetching
 
+    // ✅ Check if the user is asking Echo's name
+    const lowerCaseText = textToSend.toLowerCase();
+    if (
+      lowerCaseText.includes("what is your name") ||
+      lowerCaseText.includes("who are you") ||
+      lowerCaseText.includes("your name")
+    ) {
+      setTyping(false);
+      setMessages((prev) => [
+        ...prev,
+        { sender: "Echo", text: "I'm Echo! Your friendly AI best friend. 😊" },
+      ]);
+      return;
+    }
+
     // ✅ Prevent multiple error messages by checking the last Echo message
     const lastMessage = messages[messages.length - 1]?.text || "";
     const alreadyHasError = lastMessage.includes("⚠️");
