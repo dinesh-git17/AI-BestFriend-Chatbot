@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { FaPaperPlane, FaMicrophone, FaRobot } from "react-icons/fa";
 import { FiEdit, FiTrash, FiCheck } from "react-icons/fi";
 import PersonalitySelector from "@/components/PersonalitySelector";
@@ -33,7 +33,6 @@ interface MobileChatProps {
 
 export default function MobileChat({
   messages,
-  setMessages,
   input,
   setInput,
   sendMessage,
@@ -45,7 +44,6 @@ export default function MobileChat({
   setEditingMessageId,
   editedMessage,
   setEditedMessage,
-  handleEditMessage,
   handleSaveEdit,
   handleDeleteMessage,
   typing,
