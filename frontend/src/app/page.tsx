@@ -334,7 +334,7 @@ export default function Home() {
 
       {/* Chatbox Wrapper - Adjusted to Fit More Space */}
       <div
-        className="w-full max-w-2xl bg-[#1e1e2e] bg-opacity-80 backdrop-blur-lg p-6 rounded-xl shadow-lg flex flex-col border border-purple-500/50 hover:border-purple-400 transition"
+        className="w-full max-w-2xl bg-custom bg-opacity-80 backdrop-blur-lg p-6 rounded-xl shadow-lg flex flex-col border border-purple-500/50 hover:border-purple-600 transition"
         style={{
           height: "calc(100vh - 6rem)", // ✅ Adjusted dynamically to match the smaller title
           maxHeight: "80vh", // ✅ Prevents overflow
@@ -368,10 +368,10 @@ export default function Home() {
 
               {/* Message Bubble */}
               <div
-                className={`px-4 py-2 rounded-2xl shadow-lg max-w-[75%] text-base leading-relaxed ${
+                className={`px-4 py-3 rounded-2xl shadow-lg max-w-[75%] text-base leading-relaxed ${
                   msg.sender === "You"
                     ? "bg-gradient-to-r from-[#6a11cb] to-[#2575fc] text-white"
-                    : "bg-[#252532] text-gray-300"
+                    : "bg-[#252532] text-gray-300 shadow-lg shadow-blue-500/10"
                 }`}
               >
                 <p>{msg.text}</p>
@@ -433,24 +433,26 @@ export default function Home() {
             <FaPaperPlane className="text-lg text-white" />
           </motion.button>
         </div>
+        <div className="flex items-center w-full px-3 mt-4">
+          {/* ✅ Move Personality Selector Further Left */}
+          <div className="w-[30%] transform -translate-x-4">
+            <PersonalitySelector
+              personality={personality}
+              setPersonality={setPersonality}
+            />
+          </div>
 
-        {/* Personality Selector & Clear Chat - Inside the Card */}
-        <div className="flex justify-between items-center mt-4 w-full px-4">
-          {/* ✅ Modern Personality Selector */}
-          <PersonalitySelector
-            personality={personality}
-            setPersonality={setPersonality}
-          />
-
-          {/* Clear Chat Button */}
-          <motion.button
+          <motion.span
             onClick={clearChat}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="px-5 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white text-sm font-semibold rounded-lg shadow-md transition-all hover:opacity-80"
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            className="text-xs text-gray-400 cursor-pointer opacity-80 hover:underline transition-all"
+            style={{
+              marginLeft: "auto", // Aligns to the right
+            }}
           >
-            🗑 Clear Chat
-          </motion.button>
+            Clear Chat
+          </motion.span>
         </div>
       </div>
     </section>

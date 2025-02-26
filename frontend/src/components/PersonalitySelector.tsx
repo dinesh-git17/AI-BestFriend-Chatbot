@@ -31,7 +31,7 @@ export default function PersonalitySelector({
   ];
 
   return (
-    <div className="relative w-48" ref={dropdownRef}>
+    <div className="relative w-full max-w-[250px]" ref={dropdownRef}>
       {/* Dropdown Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
@@ -43,7 +43,7 @@ export default function PersonalitySelector({
         />
       </button>
 
-      {/* Dropdown Menu (Dynamically Positioned) */}
+      {/* Dropdown Menu (Dynamically Positioned & Aligned) */}
       {isOpen && (
         <div
           className={`absolute left-0 w-full bg-[#1e1e2e] border border-gray-700 rounded-lg shadow-lg z-50 overflow-hidden transition-all ${
