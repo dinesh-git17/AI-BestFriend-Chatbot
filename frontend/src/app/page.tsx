@@ -270,7 +270,7 @@ export default function Home() {
   };
 
   return (
-    <section className="relative w-full h-screen flex items-center justify-center bg-[#0F0F1A] text-white font-poppins overflow-hidden">
+    <section className="relative w-full h-screen flex flex-col items-center justify-center bg-[#0F0F1A] text-white font-poppins overflow-hidden">
       {/* Dark Mode Toggle */}
       <button
         onClick={() => setDarkMode((prev) => !prev)}
@@ -283,41 +283,37 @@ export default function Home() {
         )}
       </button>
 
+      {/* Title Section - Reduced Size */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="w-full text-center fixed top-0 z-50 py-6 bg-[#181824] shadow-md"
+        className="w-full text-center fixed top-0 z-50 py-4 bg-[#181824] shadow-md"
       >
-        {/* Title */}
         <motion.h1
           initial={{ scale: 0.9 }}
           animate={{ scale: 1 }}
           transition={{ duration: 0.5, ease: "easeInOut" }}
-          className="text-4xl md:text-5xl font-extrabold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-[#a78bfa] via-[#f472b6] to-[#3b82f6] flex items-center justify-center gap-3"
+          className="text-3xl md:text-4xl font-extrabold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-[#a78bfa] via-[#f472b6] to-[#3b82f6] flex items-center justify-center gap-2"
         >
-          <FaRobot className="text-5xl md:text-6xl text-blue-400 animate-pulse" />
+          <FaRobot className="text-4xl md:text-5xl text-blue-400 animate-pulse" />
           Welcome to <span className="text-white">Echo</span>
         </motion.h1>
-
-        {/* Subtitle */}
-        <p className="text-lg md:text-xl text-gray-300 mt-2 tracking-wide">
+        <p className="text-base md:text-lg text-gray-300 mt-1 tracking-wide">
           Your friendly AI companion, always here for you 💙
         </p>
       </motion.div>
 
-      {/* Chatbox Wrapper - Centered & Contained */}
-      {/* Chatbox Wrapper - Now Adjusted to Prevent Overflow */}
+      {/* Chatbox Wrapper - Adjusted to Fit More Space */}
       <div
         className="w-full max-w-2xl bg-[#1e1e2e] p-6 rounded-xl shadow-lg flex flex-col border border-gray-700"
         style={{
-          height: "75vh", // ✅ Keeps chat within bounds
-          maxHeight: "600px", // ✅ Prevents overflow into title
-          minHeight: "450px", // ✅ Ensures a minimum height
-          marginTop: "80px", // ✅ Pushes the chat below the title bar
+          height: "calc(100vh - 6rem)", // ✅ Adjusted dynamically to match the smaller title
+          maxHeight: "80vh", // ✅ Prevents overflow
+          minHeight: "600px", // ✅ Ensures proper structure
+          marginTop: "6rem", // ✅ Moves the chatbox higher
         }}
       >
-        {" "}
         {/* Chat Messages - Prevents Overflow & Keeps Messages Inside */}
         <div
           ref={chatContainerRef}
@@ -327,10 +323,22 @@ export default function Home() {
           {messages.map((msg, index) => (
             <motion.div
               key={index}
-              className={`flex ${
+              initial={{ opacity: 0, y: 10, scale: 0.95 }} // 🔹 Starts slightly lower & smaller
+              animate={{ opacity: 1, y: 0, scale: 1 }} // 🔹 Smoothly fades in & pops
+              exit={{ opacity: 0, y: -10, scale: 0.9 }} // 🔹 Disappears smoothly when removed
+              transition={{ duration: 0.3, ease: "easeOut" }} // 🔹 Quick but fluid animation
+              className={`flex gap-2 ${
                 msg.sender === "You" ? "justify-end" : "justify-start"
-              }`}
+              } items-center`}
             >
+              {/* AI Avatar (Only for Echo) */}
+              {msg.sender !== "You" && (
+                <div className="w-8 h-8 flex items-center justify-center rounded-full bg-[#3b82f6] text-white text-lg">
+                  🤖
+                </div>
+              )}
+
+              {/* Message Bubble */}
               <div
                 className={`px-4 py-2 rounded-2xl shadow-lg max-w-[75%] text-base leading-relaxed ${
                   msg.sender === "You"
@@ -338,15 +346,13 @@ export default function Home() {
                     : "bg-[#252532] text-gray-300"
                 }`}
               >
-                <p>
-                  <span className="font-semibold">{msg.sender}:</span>{" "}
-                  {msg.text}
-                </p>
+                <p>{msg.text}</p>
               </div>
             </motion.div>
           ))}
         </div>
-        {/* Chat Input */}
+
+        {/* Chat Input Section */}
         <div className="w-full mt-4 pb-2 flex items-center bg-[#252532] rounded-lg shadow-md border border-gray-600 px-3 py-2">
           <button
             onClick={() => startVoiceRecognition(setInput, input)}
@@ -374,6 +380,7 @@ export default function Home() {
             <FaPaperPlane className="text-lg text-white" />
           </motion.button>
         </div>
+
         {/* Personality Selector & Clear Chat - Inside the Card */}
         <div className="flex justify-between items-center mt-4 w-full px-4">
           {/* ✅ Modern Personality Selector */}
