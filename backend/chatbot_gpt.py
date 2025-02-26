@@ -1,5 +1,5 @@
 import openai
-from backend.config import OPENAI_API_KEY
+from config import OPENAI_API_KEY
 
 
 class Chatbot:

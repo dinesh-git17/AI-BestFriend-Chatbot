@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from backend.chatbot_gpt import Chatbot
+from chatbot_gpt import Chatbot
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
