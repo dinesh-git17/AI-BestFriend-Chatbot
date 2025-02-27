@@ -9,13 +9,24 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from textblob import TextBlob
-import os
+from config_redis import REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_SSL
+
+# ✅ Initialize Redis client with Upstash authentication
+try:
+    redis_client = redis.Redis(
+        host=REDIS_HOST,
+        port=int(REDIS_PORT),
+        password=REDIS_PASSWORD,
+        ssl=REDIS_SSL,
+        decode_responses=True,
+        socket_timeout=5,  # ✅ Timeout to prevent long waits if Redis is down
+    )
+    redis_client.ping()  # ✅ Test if Redis is reachable
+except redis.RedisError as e:
+    print("⚠️ Redis Connection Failed:", e)
+    redis_client = None  # ✅ Fallback to no caching
 
 app = FastAPI()
-
-# ✅ Get Redis URL from Render environment variables
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")  # Default fallback
-redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 # ✅ Rate Limiter (3 requests per second per user)
 limiter = Limiter(key_func=get_remote_address)
@@ -23,9 +34,6 @@ app.state.limiter = limiter
 
 # ✅ Register Rate Limit Exception Handler
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-# ✅ Redis Cache Setup
-redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
 
 # ✅ Allow frontend URLs
 app.add_middleware(
@@ -90,10 +98,11 @@ async def chat(request: Request, user_id: str = Header(default=str(uuid.uuid4())
         # ✅ Sanitize Redis Key
         cache_key = sanitize_key(f"{user_id}:{personality}:{user_input.lower()}")
 
-        # ✅ Check Redis Cache
-        cached_response = redis_client.get(cache_key)
-        if cached_response:
-            return {"response": cached_response}
+        # ✅ Check Redis Cache (Only if Redis is available)
+        if redis_client:
+            cached_response = redis_client.get(cache_key)
+            if cached_response:
+                return {"response": cached_response}
 
         # ✅ Sentiment Analysis to Adjust Response Tone
         sentiment_score = TextBlob(user_input).sentiment.polarity
@@ -113,8 +122,9 @@ async def chat(request: Request, user_id: str = Header(default=str(uuid.uuid4())
         if not full_response:
             full_response = "⚠️ Sorry, I couldn't generate a response. Please try again."
 
-        # ✅ Cache response (1 hour)
-        redis_client.setex(cache_key, 3600, full_response)
+        # ✅ Cache response (1 hour) (Only if Redis is available)
+        if redis_client:
+            redis_client.setex(cache_key, 3600, full_response)
 
         return {"response": full_response}
 

@@ -171,3 +171,6 @@ cython_debug/
 .pypirc
 
 dump.rdb
+
+#ignore redis config details
+backend/config_redis.py
