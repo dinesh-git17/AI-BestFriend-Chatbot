@@ -170,7 +170,5 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# redis cache
 dump.rdb
-
-#ignore redis config details
-backend/config_redis.py
