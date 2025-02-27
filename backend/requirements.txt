@@ -1,5 +1,25 @@
+# FastAPI & Uvicorn (for the API backend)
 fastapi
 uvicorn
-pydantic
+
+# OpenAI API
 openai
+
+# Redis (for caching with Upstash)
+redis
+
+# SlowAPI (for rate limiting)
+slowapi
+
+# TextBlob (for sentiment analysis)
+textblob
+
+# Pydantic (for request validation)
+pydantic
+
+# Starlette (dependency for FastAPI)
+starlette
+
+# Additional utilities (if needed)
+httpx
 python-dotenv
