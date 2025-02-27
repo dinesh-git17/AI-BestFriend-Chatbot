@@ -7,6 +7,10 @@ import { motion } from "framer-motion";
 import { FaPaperPlane, FaRobot, FaMicrophone, FaSun, FaMoon } from "react-icons/fa";
 import { FiEdit, FiTrash, FiCheck } from "react-icons/fi";
 import MobileChat from "@/components/MobileChat";
+import ReactMarkdown from "react-markdown";
+import rehypeRaw from "rehype-raw";
+import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
 
 // Voice Recognition Support
 declare global {
@@ -115,7 +119,7 @@ export default function Home() {
           : [
               {
                 sender: "Echo",
-                text: `${getGreeting()} 😊 I'm Echo, your AI best friend. I'm here to chat, listen, and support you anytime! 💙`,
+                text: `## 👋 Welcome to Echo!\n\nHi there! 😊 I'm **Echo**, your AI best friend. I'm here to chat, listen, and support you anytime. 💙\n\nHow can I help you today?`,
               },
             ],
       );
@@ -173,6 +177,14 @@ export default function Home() {
     setInput("");
     setTyping(true); // ✅ Show "Echo is typing..." before fetching
 
+    // ✅ Get the latest personality state
+    const latestPersonality = personality;
+    console.log(`🧠 Sending request with personality: ${latestPersonality}`);
+
+    // ✅ Debug Request Body
+    const requestBody = JSON.stringify({ user_input: textToSend, personality: latestPersonality });
+    console.log(`📤 Request Payload: ${requestBody}`);
+
     // ✅ Check if the user is asking Echo's name
     const lowerCaseText = textToSend.toLowerCase();
     if (
@@ -222,13 +234,14 @@ export default function Home() {
           },
         ]);
       }
-    }, 5000); // ✅ Faster timeout (5 seconds)
+    }, 30000); // ✅ Faster timeout (30 seconds)
 
     try {
       const response = await fetch(`${API_URL}/chat/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_input: textToSend, personality }),
+        body: JSON.stringify({ user_input: textToSend, personality: latestPersonality }), // ✅ Use latest personality
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -422,7 +435,12 @@ export default function Home() {
                     : "bg-[#252532] text-gray-300 shadow-lg shadow-blue-500/10"
                 }`}
               >
-                <p>{msg.text}</p>
+                <ReactMarkdown
+                  rehypePlugins={[rehypeRaw]}
+                  remarkPlugins={[remarkGfm, remarkBreaks]} // ✅ Enables proper line breaks
+                >
+                  {msg.text}
+                </ReactMarkdown>
               </div>
             </motion.div>
           ))}

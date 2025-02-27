@@ -55,7 +55,9 @@ export default function PersonalitySelector({
             <button
               key={option.value}
               onClick={() => {
-                setPersonality(option.value);
+                console.log(`🔹 Personality changed to: ${option.value}`); // ✅ Debugging log
+
+                setPersonality(option.value); // ✅ Ensure personality updates
                 setIsOpen(false);
               }}
               className="w-full text-left px-4 py-3 text-white hover:bg-purple-600 transition flex items-center"
