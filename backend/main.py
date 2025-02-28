@@ -1,6 +1,7 @@
 import re
 import redis
 import uuid
+import openai
 from chatbot_gpt import Chatbot
 from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +11,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from textblob import TextBlob
 from config_redis import REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_SSL
+from config import OPENAI_API_KEY  # Ensure API key is securely imported
 
 # ✅ Initialize Redis client with Upstash authentication
 try:
@@ -27,6 +29,7 @@ except redis.RedisError as e:
     redis_client = None  # ✅ Fallback to no caching
 
 app = FastAPI()
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 # ✅ Rate Limiter (3 requests per second per user)
 limiter = Limiter(key_func=get_remote_address)
@@ -43,15 +46,19 @@ app.add_middleware(
         "https://ai-best-friend-chatbot.vercel.app",
     ],
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all HTTP methods
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
-# ✅ Define request model
+# ✅ Define request models
 class ChatRequest(BaseModel):
     user_input: str
     personality: str = "Friendly"
+
+
+class TitleRequest(BaseModel):
+    messages: list
 
 
 bot = Chatbot()
@@ -72,33 +79,26 @@ def sanitize_key(key: str) -> str:
 @limiter.limit("3 per second")
 async def chat(request: Request, user_id: str = Header(default=str(uuid.uuid4()))):
     try:
-        # ✅ Read JSON body safely
         json_data = await request.json()
 
-        # ✅ Validate request fields
         if "user_input" not in json_data or "personality" not in json_data:
             raise HTTPException(
                 status_code=400,
                 detail="Missing `user_input` or `personality` in request.",
             )
 
-        # ✅ Extract values
         user_input = json_data["user_input"].strip()
         personality = json_data.get("personality", "Friendly").strip()
 
-        # ✅ Ensure `user_input` is not empty
         if not user_input:
             raise HTTPException(status_code=400, detail="User input cannot be empty.")
 
-        # ✅ Validate personality
         valid_personalities = ["Friendly", "Funny", "Professional", "Supportive"]
         if personality not in valid_personalities:
-            personality = "Friendly"  # ✅ Default if invalid
+            personality = "Friendly"
 
-        # ✅ Sanitize Redis Key
         cache_key = sanitize_key(f"{user_id}:{personality}:{user_input.lower()}")
 
-        # ✅ Check Redis Cache (Only if Redis is available)
         if redis_client:
             cached_response = redis_client.get(cache_key)
             if cached_response:
@@ -107,22 +107,17 @@ async def chat(request: Request, user_id: str = Header(default=str(uuid.uuid4())
         # ✅ Sentiment Analysis to Adjust Response Tone
         sentiment_score = TextBlob(user_input).sentiment.polarity
         if sentiment_score < -0.5:
-            personality = "Supportive"  # ✅ Switch if user is sad
+            personality = "Supportive"
 
-        # ✅ Get response via streaming
         response_chunks = []
         async for chunk in bot.get_response_stream(user_input, personality, user_id):
             if chunk:
                 response_chunks.append(chunk)
 
-        # ✅ Combine response chunks
         full_response = "".join(response_chunks).strip()
-
-        # ✅ Handle empty responses
         if not full_response:
             full_response = "⚠️ Sorry, I couldn't generate a response. Please try again."
 
-        # ✅ Cache response (1 hour) (Only if Redis is available)
         if redis_client:
             redis_client.setex(cache_key, 3600, full_response)
 
@@ -133,3 +128,65 @@ async def chat(request: Request, user_id: str = Header(default=str(uuid.uuid4())
             status_code=500,
             detail="⚠️ An unexpected error occurred. Please try again later.",
         )
+
+
+# ✅ NEW ENDPOINT: Generate a Chat Title Based on Messages
+@app.post("/generate-chat-title/")
+async def generate_chat_title(request: TitleRequest):
+    try:
+        # ✅ Ensure OpenAI API Key is set
+        if not OPENAI_API_KEY:
+            raise HTTPException(status_code=500, detail="Missing OpenAI API Key.")
+
+        # ✅ Extract the messages to summarize
+        messages = request.messages
+        if not messages or len(messages) == 0:
+            raise HTTPException(status_code=400, detail="No messages provided.")
+
+        # ✅ Use Redis caching for title generation
+        chat_key = sanitize_key(f"chat_title:{hash(str(messages))}")
+
+        if redis_client:
+            cached_title = redis_client.get(chat_key)
+            if cached_title:
+                return {"title": cached_title}
+
+        # ✅ Prepare system prompt for generating a title
+        system_prompt = (
+            "Generate a short, relevant chat title based on the following messages. "
+            "Make it engaging and keep it under 5 words."
+        )
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "system", "content": system_prompt}]
+            + [
+                {"role": "user", "content": str(msg.get("text", ""))}
+                for msg in messages[:3]
+            ],  # ✅ Ensures correct message structure
+            temperature=0.5,
+            max_tokens=10,
+        )  # type: ignore  # ✅ Pylance will ignore type errors here
+
+        # ✅ Handle None case safely
+        chat_title = (
+            response.choices[0].message.content.strip()
+            if response.choices[0].message.content
+            else "New Chat"
+        )
+
+        # ✅ Store the generated title in Redis for 24 hours
+        if redis_client:
+            redis_client.setex(chat_key, 86400, chat_title)
+
+        return {"title": chat_title}
+
+    except openai.OpenAIError as e:  # ✅ FIXED OpenAI Exception Handling
+        print("OpenAI API Error:", str(e))
+        raise HTTPException(
+            status_code=500, detail="⚠️ OpenAI API Error. Try again later."
+        )
+
+    except Exception as e:
+        print("Error generating chat title:", str(e))
+        raise HTTPException(status_code=500, detail="Failed to generate chat title.")

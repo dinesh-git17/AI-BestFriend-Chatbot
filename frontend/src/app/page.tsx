@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import PersonalitySelector from "@/components/PersonalitySelector";
 import { motion } from "framer-motion";
 import { FaPaperPlane, FaRobot, FaMicrophone, FaSun, FaMoon } from "react-icons/fa";
-import { FiTrash, FiPlus } from "react-icons/fi";
+import { FiPlus } from "react-icons/fi";
 import MobileChat from "@/components/MobileChat";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
@@ -139,6 +139,15 @@ export default function Home() {
   const [editedMessage, setEditedMessage] = useState("");
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+  const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
+
+  const [renamingChatId, setRenamingChatId] = useState<string | null>(null);
+  const [newChatName, setNewChatName] = useState("");
+
+  const toggleDropdown = (chatId: string) => {
+    setDropdownOpen((prev) => (prev === chatId ? null : chatId));
+  };
+
   const [chats, setChats] = useState<{
     [key: string]: { name: string; messages: { sender: string; text: string }[] };
   }>({});
@@ -192,6 +201,23 @@ export default function Home() {
       document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
     }
   }, [darkMode]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownOpen &&
+        event.target instanceof HTMLElement && // ✅ Ensure event.target is an HTMLElement
+        !event.target.closest(".dropdown-menu")
+      ) {
+        setDropdownOpen(null);
+      }
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+    };
+  }, [dropdownOpen]);
 
   const sendMessage = async (presetText?: string) => {
     if (!currentChatId) return;
@@ -371,11 +397,14 @@ export default function Home() {
     setMessages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // ✅ Create a new chat
-  const createNewChat = () => {
+  // ✅ Create a new chat with smart naming
+  const createNewChat = async () => {
     const newChatId = `chat-${Date.now()}`;
+    const fallbackName = "New Conversation"; // ✅ Fallback if API fails
+
+    // ✅ Placeholder name while fetching a title
     const newChat = {
-      name: `Chat ${Object.keys(chats).length + 1}`,
+      name: "Generating name...",
       messages: [
         {
           sender: "Echo",
@@ -384,11 +413,56 @@ export default function Home() {
       ],
     };
 
-    const updatedChats = { ...chats, [newChatId]: newChat };
-    setChats(updatedChats);
+    // ✅ Optimistically update UI with a new chat
+    setChats((prevChats) => {
+      const updatedChats = { ...prevChats, [newChatId]: newChat };
+      localStorage.setItem("chats", JSON.stringify(updatedChats));
+      return updatedChats;
+    });
+
     setCurrentChatId(newChatId);
-    localStorage.setItem("chats", JSON.stringify(updatedChats));
     localStorage.setItem("lastChatId", newChatId);
+
+    try {
+      // ✅ Call backend API to generate a smart chat title
+      const response = await fetch(`${API_URL}/generate-chat-title/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: newChat.messages.slice(0, 3), // ✅ Send first few messages for context
+        }),
+      });
+
+      if (!response.ok) {
+        console.error("Chat title API error:", await response.text());
+        throw new Error("Failed to generate chat name");
+      }
+
+      const data = await response.json();
+      const chatTitle = data.title?.trim() || fallbackName; // ✅ Use API-generated title or fallback
+
+      // ✅ Update chat name after fetching
+      setChats((prevChats) => {
+        const updatedChats = {
+          ...prevChats,
+          [newChatId]: { ...prevChats[newChatId], name: chatTitle },
+        };
+        localStorage.setItem("chats", JSON.stringify(updatedChats));
+        return updatedChats;
+      });
+    } catch (error) {
+      console.error("Error generating chat name:", error);
+
+      // ✅ Fallback: Update with default name
+      setChats((prevChats) => {
+        const updatedChats = {
+          ...prevChats,
+          [newChatId]: { ...prevChats[newChatId], name: fallbackName },
+        };
+        localStorage.setItem("chats", JSON.stringify(updatedChats));
+        return updatedChats;
+      });
+    }
   };
 
   const switchChat = (chatId: string) => {
@@ -441,6 +515,19 @@ export default function Home() {
     };
 
     setChats(updatedChats);
+    localStorage.setItem("chats", JSON.stringify(updatedChats));
+  };
+
+  const handleRenameChat = (chatId: string) => {
+    if (!newChatName.trim()) return;
+
+    const updatedChats = {
+      ...chats,
+      [chatId]: { ...chats[chatId], name: newChatName.trim() },
+    };
+
+    setChats(updatedChats);
+    setRenamingChatId(null);
     localStorage.setItem("chats", JSON.stringify(updatedChats));
   };
 
@@ -502,29 +589,78 @@ export default function Home() {
             <motion.li
               key={chatId}
               whileHover={{ scale: 1.02 }} // 🔥 Smooth Hover Effect
-              className={`flex justify-between items-center px-2 py-3 rounded-lg cursor-pointer font-medium transition-all
-          ${
-            chatId === currentChatId
-              ? "bg-gradient-to-r from-[#6a11cb] to-[#2575fc] text-white shadow-lg w-full rounded-2xl" // 🔥 Rounded & Smooth Active Chat
-              : "hover:bg-[#2d2f3a] text-gray-300 hover:text-white transition rounded-lg"
-          }`}
+              className={`relative flex justify-between items-center px-2 py-3 rounded-lg cursor-pointer font-medium transition-all ${
+                chatId === currentChatId
+                  ? "bg-gradient-to-r from-[#6a11cb] to-[#2575fc] text-white shadow-lg w-full rounded-2xl"
+                  : "hover:bg-[#2d2f3a] text-gray-300 hover:text-white transition rounded-lg"
+              }`}
             >
-              <span onClick={() => switchChat(chatId)} className="flex-1 truncate">
-                {chat.name}
-              </span>
+              {renamingChatId === chatId ? (
+                <input
+                  type="text"
+                  value={newChatName}
+                  onChange={(e) => setNewChatName(e.target.value)}
+                  onBlur={() => handleRenameChat(chatId)} // ✅ Rename on blur
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleRenameChat(chatId);
+                    if (e.key === "Escape") setRenamingChatId(null);
+                  }}
+                  autoFocus
+                  className="flex-1 bg-transparent text-white border border-gray-600 focus:border-blue-400 rounded-md px-2 py-1 outline-none transition-all w-full"
+                  style={{
+                    minWidth: "0", // ✅ Prevents wrapping issues
+                    overflow: "hidden", // ✅ Prevents unnecessary scrollbars
+                    textOverflow: "ellipsis", // ✅ Keeps text neatly inside
+                    whiteSpace: "nowrap", // ✅ Prevents multi-line expansion
+                  }}
+                />
+              ) : (
+                <span onClick={() => switchChat(chatId)} className="flex-1 truncate px-2 py-1">
+                  {chat.name}
+                </span>
+              )}
 
-              {/* 🔥 Subtle Delete Icon */}
-              <motion.button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteChat(chatId);
-                }}
-                whileHover={{ scale: 1.2 }}
-                whileTap={{ scale: 0.9 }}
-                className="ml-2 p-1 rounded-full text-gray-400 hover:text-red-500 transition-opacity"
-              >
-                <FiTrash size={16} />
-              </motion.button>
+              {/* 🔥 Dropdown Menu Trigger (Three-Dot Button) */}
+              <div className="relative">
+                <motion.button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleDropdown(chatId);
+                  }}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  className="ml-2 p-1 rounded-full text-gray-400 hover:text-gray-100 transition-opacity"
+                >
+                  •••
+                </motion.button>
+
+                {/* 🔥 Dropdown Menu */}
+                {dropdownOpen === chatId && (
+                  <div className="absolute right-0 top-8 w-32 bg-[#1e1e2e] rounded-lg shadow-lg z-50 border border-gray-700 dropdown-menu">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRenamingChatId(chatId);
+                        setNewChatName(chats[chatId].name);
+                        setDropdownOpen(null);
+                      }}
+                      className="w-full px-3 py-2 text-left text-gray-300 hover:bg-[#343541] hover:text-white transition"
+                    >
+                      Rename
+                    </button>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteChat(chatId);
+                      }}
+                      className="w-full px-3 py-2 text-left text-red-400 hover:bg-[#343541] hover:text-white transition"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
             </motion.li>
           ))}
         </ul>
