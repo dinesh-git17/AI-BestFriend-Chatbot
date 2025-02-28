@@ -383,23 +383,22 @@ export default function Home() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.9 }}
               transition={{ duration: 0.3, ease: "easeOut" }}
-              className={`flex gap-2 items-end ${
+              className={`flex w-full ${
                 msg.sender === "You" ? "justify-end" : "justify-start"
-              }`}
+              } mb-2`}
             >
-              {/* Chat Bubble */}
               <div
-                className={`relative px-5 py-4 rounded-2xl shadow-lg max-w-[70%] text-[15px] leading-relaxed 
-        ${
-          msg.sender === "You"
-            ? "bg-gradient-to-r from-[#6a11cb] to-[#2575fc] text-white shadow-blue-500/30"
-            : "bg-[#252532] text-gray-300 shadow-lg"
-        }
-      `}
+                className={`relative text-[15px] leading-relaxed shadow-md ${
+                  msg.sender === "You"
+                    ? "bg-gradient-to-r from-[#6a11cb] to-[#2575fc] text-white"
+                    : "bg-[#252532] text-gray-300"
+                }`}
                 style={{
-                  wordBreak: "break-word",
-                  borderRadius: "18px",
-                  padding: "12px 16px",
+                  display: "inline-block", // Prevents full-width stretching
+                  maxWidth: "70%", // Ensures bubble auto-sizes based on text
+                  wordBreak: "break-word", // Ensures text doesn't overflow
+                  padding: "10px 16px", // Balances spacing inside bubble
+                  borderRadius: msg.sender === "You" ? "20px 20px 5px 20px" : "20px 20px 20px 5px", // Custom curve
                   boxShadow:
                     msg.sender === "You"
                       ? "0px 4px 12px rgba(102, 51, 153, 0.3)"
@@ -410,11 +409,11 @@ export default function Home() {
                   rehypePlugins={[rehypeRaw]}
                   remarkPlugins={[remarkGfm, remarkBreaks]}
                   components={{
-                    h1: ({ children }) => <h1 className="text-xl font-bold mt-2">{children}</h1>,
+                    h1: ({ children }) => <h1 className="text-lg font-bold mt-2">{children}</h1>,
                     h2: ({ children }) => (
-                      <h2 className="text-lg font-semibold mt-2">{children}</h2>
+                      <h2 className="text-md font-semibold mt-2">{children}</h2>
                     ),
-                    p: ({ children }) => <p className="mb-2">{children}</p>,
+                    p: ({ children }) => <p className="mb-1">{children}</p>,
                     ul: ({ children }) => (
                       <ul className="list-disc list-inside ml-4">{children}</ul>
                     ),
