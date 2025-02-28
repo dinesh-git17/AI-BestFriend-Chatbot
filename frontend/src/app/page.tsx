@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import PersonalitySelector from "@/components/PersonalitySelector";
 import { motion } from "framer-motion";
 import { FaPaperPlane, FaRobot, FaMicrophone, FaSun, FaMoon } from "react-icons/fa";
-import { FiEdit, FiTrash, FiCheck } from "react-icons/fi";
+import { FiTrash, FiPlus } from "react-icons/fi";
 import MobileChat from "@/components/MobileChat";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
@@ -132,12 +132,17 @@ export default function Home() {
   const [darkMode, setDarkMode] = useState(true);
   const [personality, setPersonality] = useState("Friendly");
   const chatContainerRef = useRef<HTMLDivElement>(null); // ✅ Add error state for network errors
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [typing, setTyping] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editedMessage, setEditedMessage] = useState("");
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+  const [chats, setChats] = useState<{
+    [key: string]: { name: string; messages: { sender: string; text: string }[] };
+  }>({});
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -145,6 +150,23 @@ export default function Home() {
 
   useEffect(() => {
     inputRef.current?.focus();
+  }, []);
+
+  // ✅ Load chats from localStorage on startup
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedChats = localStorage.getItem("chats");
+      if (savedChats) {
+        setChats(JSON.parse(savedChats));
+      }
+
+      const lastChat = localStorage.getItem("lastChatId");
+      if (lastChat && JSON.parse(savedChats || "{}")[lastChat]) {
+        setCurrentChatId(lastChat);
+      } else {
+        createNewChat();
+      }
+    }
   }, []);
 
   // Auto-scroll to latest message smoothly
@@ -172,6 +194,8 @@ export default function Home() {
   }, [darkMode]);
 
   const sendMessage = async (presetText?: string) => {
+    if (!currentChatId) return;
+
     const textToSend = presetText || input.trim();
     if (!textToSend) return;
 
@@ -179,13 +203,29 @@ export default function Home() {
     setInput("");
     setTyping(true); // ✅ Show "Echo is typing..." before fetching
 
+    // ✅ Add message to the current chat
+    const updatedChats = {
+      ...chats,
+      [currentChatId]: {
+        ...chats[currentChatId],
+        messages: [...(chats[currentChatId]?.messages || []), { sender: "You", text: textToSend }],
+      },
+    };
+
+    setChats(updatedChats);
+    setInput("");
+    setTyping(true);
+
+    // ✅ Reset textarea height after sending
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
+
+    localStorage.setItem("chats", JSON.stringify(updatedChats));
+
     // ✅ Get the latest personality state
     const latestPersonality = personality;
     console.log(`🧠 Sending request with personality: ${latestPersonality}`);
-
-    // ✅ Debug Request Body
-    const requestBody = JSON.stringify({ user_input: textToSend, personality: latestPersonality });
-    console.log(`📤 Request Payload: ${requestBody}`);
 
     // ✅ Check if the user is asking Echo's name
     const lowerCaseText = textToSend.toLowerCase();
@@ -195,46 +235,70 @@ export default function Home() {
       lowerCaseText.includes("your name")
     ) {
       setTyping(false);
-      setMessages((prev) => [
-        ...prev,
-        { sender: "Echo", text: "I'm Echo! Your friendly AI best friend. 😊" },
-      ]);
+      const responseMessage = {
+        sender: "Echo",
+        text: "I'm Echo! Your friendly AI best friend. 😊",
+      };
+
+      setChats((prevChats) => ({
+        ...prevChats,
+        [currentChatId]: {
+          ...prevChats[currentChatId],
+          messages: [...prevChats[currentChatId].messages, responseMessage],
+        },
+      }));
+
+      localStorage.setItem("chats", JSON.stringify(updatedChats));
       return;
     }
 
     // ✅ Prevent multiple error messages by checking the last Echo message
-    const lastMessage = messages[messages.length - 1]?.text || "";
+    const lastMessage = chats[currentChatId]?.messages.slice(-1)[0]?.text || "";
     const alreadyHasError = lastMessage.includes("⚠️");
 
     // ✅ Check if the user is offline and immediately show ONE error message
     if (!navigator.onLine) {
-      setTyping(false); // ✅ Remove typing indicator
+      setTyping(false);
       if (!alreadyHasError) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            sender: "Echo",
-            text: "⚠️ No internet connection. Please check your network.",
+        const offlineMessage = {
+          sender: "Echo",
+          text: "⚠️ No internet connection. Please check your network.",
+        };
+
+        setChats((prevChats) => ({
+          ...prevChats,
+          [currentChatId]: {
+            ...prevChats[currentChatId],
+            messages: [...prevChats[currentChatId].messages, offlineMessage],
           },
-        ]);
+        }));
+
+        localStorage.setItem("chats", JSON.stringify(updatedChats));
       }
       return;
     }
 
-    let timeoutTriggered = false; // ✅ Track if timeout already added an error
-    const controller = new AbortController(); // ✅ Create an AbortController
+    let timeoutTriggered = false;
+    const controller = new AbortController();
     const timeout = setTimeout(() => {
       timeoutTriggered = true;
-      controller.abort(); // ✅ Cancel the request if it's taking too long
-      setTyping(false); // ✅ Remove typing indicator
+      controller.abort();
+      setTyping(false);
       if (!alreadyHasError) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            sender: "Echo",
-            text: "⚠️ Server is not responding. Try again later.",
+        const timeoutMessage = {
+          sender: "Echo",
+          text: "⚠️ Server is not responding. Try again later.",
+        };
+
+        setChats((prevChats) => ({
+          ...prevChats,
+          [currentChatId]: {
+            ...prevChats[currentChatId],
+            messages: [...prevChats[currentChatId].messages, timeoutMessage],
           },
-        ]);
+        }));
+
+        localStorage.setItem("chats", JSON.stringify(updatedChats));
       }
     }, 30000); // ✅ Faster timeout (30 seconds)
 
@@ -242,7 +306,7 @@ export default function Home() {
       const response = await fetch(`${API_URL}/chat/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_input: textToSend, personality: latestPersonality }), // ✅ Use latest personality
+        body: JSON.stringify({ user_input: textToSend, personality: latestPersonality }),
         signal: controller.signal,
       });
 
@@ -250,40 +314,41 @@ export default function Home() {
         throw new Error("Failed to fetch response");
       }
 
-      clearTimeout(timeout); // ✅ Clear timeout if response arrives in time
-
+      clearTimeout(timeout);
       const data = await response.json();
-      setTyping(false); // ✅ Remove typing indicator
-      setMessages((prev) => [...prev, { sender: "Echo", text: data.response }]);
+      setTyping(false);
+
+      // ✅ Add AI response to the correct chat
+      const responseMessage = { sender: "Echo", text: data.response };
+      setChats((prevChats) => ({
+        ...prevChats,
+        [currentChatId]: {
+          ...prevChats[currentChatId],
+          messages: [...prevChats[currentChatId].messages, responseMessage],
+        },
+      }));
+
+      localStorage.setItem("chats", JSON.stringify(updatedChats));
     } catch (error) {
       console.error("Error sending message:", error);
 
-      setTyping(false); // ✅ Remove typing indicator
-      // ✅ Ensure only ONE error message appears & avoid sending both timeout and fetch errors
+      setTyping(false);
       if (!alreadyHasError && !timeoutTriggered) {
-        setMessages((prev) => [
-          ...prev,
-          { sender: "Echo", text: "⚠️ Unable to connect. Please try again." },
-        ]);
+        const errorMessage = { sender: "Echo", text: "⚠️ Unable to connect. Please try again." };
+
+        setChats((prevChats) => ({
+          ...prevChats,
+          [currentChatId]: {
+            ...prevChats[currentChatId],
+            messages: [...prevChats[currentChatId].messages, errorMessage],
+          },
+        }));
+
+        localStorage.setItem("chats", JSON.stringify(updatedChats));
       }
 
-      clearTimeout(timeout); // ✅ Ensure timeout doesn't trigger after fetch fails
+      clearTimeout(timeout);
     }
-  };
-
-  const clearChat = () => {
-    const greetingMessage = `${getGreeting()} 😊 I'm Echo, your AI best friend. I'm here to chat, listen, and support you anytime! 💙`;
-
-    console.log("Clearing chat with greeting:", greetingMessage); // ✅ Debugging log
-
-    setMessages([
-      {
-        sender: "Echo",
-        text: greetingMessage,
-      },
-    ]);
-
-    localStorage.removeItem("chatHistory");
   };
 
   const handleEditMessage = (index: number) => {
@@ -304,6 +369,79 @@ export default function Home() {
 
   const handleDeleteMessage = (index: number) => {
     setMessages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // ✅ Create a new chat
+  const createNewChat = () => {
+    const newChatId = `chat-${Date.now()}`;
+    const newChat = {
+      name: `Chat ${Object.keys(chats).length + 1}`,
+      messages: [
+        {
+          sender: "Echo",
+          text: `## Hi there! 😊 I'm **Echo**, your AI best friend.\n\n I'm here to chat, listen, and support you anytime. 💙\n\nHow can I help you today?`,
+        },
+      ],
+    };
+
+    const updatedChats = { ...chats, [newChatId]: newChat };
+    setChats(updatedChats);
+    setCurrentChatId(newChatId);
+    localStorage.setItem("chats", JSON.stringify(updatedChats));
+    localStorage.setItem("lastChatId", newChatId);
+  };
+
+  const switchChat = (chatId: string) => {
+    setCurrentChatId(chatId);
+    localStorage.setItem("lastChatId", chatId);
+  };
+
+  const deleteChat = (chatId: string) => {
+    const updatedChats = { ...chats };
+    delete updatedChats[chatId];
+
+    if (Object.keys(updatedChats).length === 0) {
+      // ✅ If all chats are deleted, reset to Chat 1 with a welcome message
+      const newChatId = "chat-1";
+      updatedChats[newChatId] = {
+        name: "Chat 1",
+        messages: [
+          {
+            sender: "Echo",
+            text: `## Hi there! 😊 I'm **Echo**, your AI best friend.\n\n I'm here to chat, listen, and support you anytime. 💙\n\nHow can I help you today?`,
+          },
+        ],
+      };
+      setCurrentChatId(newChatId);
+    } else {
+      // ✅ Ensure `setCurrentChatId` only receives a string
+      const firstChatId = Object.keys(updatedChats)[0] || "chat-1";
+      setCurrentChatId(firstChatId);
+    }
+
+    setChats(updatedChats);
+    localStorage.setItem("chats", JSON.stringify(updatedChats));
+    localStorage.setItem("lastChatId", currentChatId || "chat-1"); // ✅ Ensure `string`
+  };
+
+  const clearChat = () => {
+    if (!currentChatId) return;
+
+    const greetingMessage = `${getGreeting()} 😊 I'm Echo, your AI best friend. I'm here to chat, listen, and support you anytime! 💙`;
+
+    console.log("Clearing chat with greeting:", greetingMessage); // ✅ Debugging log
+
+    // Update the chat messages for the current chat
+    const updatedChats = {
+      ...chats,
+      [currentChatId]: {
+        ...chats[currentChatId],
+        messages: [{ sender: "Echo", text: greetingMessage }],
+      },
+    };
+
+    setChats(updatedChats);
+    localStorage.setItem("chats", JSON.stringify(updatedChats));
   };
 
   return isMobile ? (
@@ -327,225 +465,239 @@ export default function Home() {
       typing={typing}
     />
   ) : (
-    <section className="relative w-full h-screen flex flex-col items-center justify-center bg-[#0F0F1A] text-white font-poppins overflow-hidden">
-      {/* Dark Mode Toggle */}
-      <button
-        onClick={() => setDarkMode((prev) => !prev)}
-        className="fixed top-6 right-6 z-[60] bg-gray-800 p-1 rounded-full hover:bg-gray-700 transition shadow-lg"
-        style={{ transform: "translateY(15px)" }}
-      >
-        {darkMode ? (
-          <FaSun className="text-yellow-400 text-m" />
-        ) : (
-          <FaMoon className="text-gray-300 text-m" />
-        )}
-      </button>
-
-      {/* Title Section */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-        className="w-full text-center fixed top-0 z-50 py-4 bg-[#181824] shadow-md"
-      >
-        <motion.h1
-          initial={{ scale: 0.9 }}
-          animate={{ scale: 1 }}
-          transition={{ duration: 0.5, ease: "easeInOut" }}
-          className="text-3xl md:text-4xl font-extrabold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-[#a78bfa] via-[#f472b6] to-[#3b82f6] flex items-center justify-center gap-2"
-        >
-          <FaRobot className="text-4xl md:text-5xl text-blue-400 animate-pulse" />
-          Welcome to <span className="text-white">Echo</span>
-        </motion.h1>
-        <p className="text-base md:text-lg text-gray-300 mt-1 tracking-wide">
-          Your friendly AI companion, always here for you 💙
-        </p>
-      </motion.div>
-
-      {/* Chatbox Wrapper - Adjusted Height to Avoid Touching Title */}
-      <div
-        className="flex flex-col flex-grow w-full max-w-5xl bg-custom bg-opacity-80 backdrop-blur-lg p-6 rounded-xl shadow-lg border border-purple-500/50 hover:border-purple-600 transition mx-auto mt-[8rem] mb-6"
-        style={{
-          minHeight: "60vh",
-          maxHeight: "80vh", // ✅ Adjusted to prevent bottom overflow
-          height: "calc(100vh - 10rem)", // ✅ Added extra space at bottom
-        }}
-      >
-        {/* Chat Messages */}
-        <div
-          ref={chatContainerRef}
-          className="flex flex-col justify-start flex-grow overflow-y-auto space-y-3 p-3 scrollbar-thin scrollbar-track-[#1e1e2e] scrollbar-thumb-[#6a11cb] scrollbar-thumb-rounded-full w-full"
-        >
-          {messages.map((msg, index) => (
+    <div className="relative w-full h-screen flex bg-[#0F0F1A] text-white font-poppins">
+      {/* 🔥 Sidebar - Adjusted for Proper Chat List Positioning */}
+      <div className="fixed left-0 top-0 w-64 h-screen bg-[#15151e] px-3 pt-4 pb-5 shadow-lg z-40 overflow-y-auto border-r border-gray-700 flex flex-col">
+        {/* 🔥 Branding - Properly Adjusted */}
+        <div className="flex items-center justify-between px-2 py-3">
+          <div className="flex items-center gap-3">
             <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.9 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className={`flex w-full ${
-                msg.sender === "You" ? "justify-end" : "justify-start"
-              } mb-2`}
+              animate={{ y: [0, -6, 0] }} // Bouncing Animation
+              transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
             >
-              <div
-                className={`relative text-[15px] leading-relaxed shadow-md ${
-                  msg.sender === "You"
-                    ? "bg-gradient-to-r from-[#6a11cb] to-[#2575fc] text-white"
-                    : "bg-[#252532] text-gray-300"
-                }`}
-                style={{
-                  display: "inline-block", // Prevents full-width stretching
-                  maxWidth: "70%", // Ensures bubble auto-sizes based on text
-                  wordBreak: "break-word", // Ensures text doesn't overflow
-                  padding: "10px 16px", // Balances spacing inside bubble
-                  borderRadius: msg.sender === "You" ? "20px 20px 5px 20px" : "20px 20px 20px 5px", // Custom curve
-                  boxShadow:
-                    msg.sender === "You"
-                      ? "0px 4px 12px rgba(102, 51, 153, 0.3)"
-                      : "0px 4px 12px rgba(0,0,0,0.2)",
-                }}
-              >
-                <ReactMarkdown
-                  rehypePlugins={[rehypeRaw]}
-                  remarkPlugins={[remarkGfm, remarkBreaks]}
-                  components={{
-                    h1: ({ children }) => <h1 className="text-lg font-bold mt-2">{children}</h1>,
-                    h2: ({ children }) => (
-                      <h2 className="text-md font-semibold mt-2">{children}</h2>
-                    ),
-                    p: ({ children }) => <p className="mb-1">{children}</p>,
-                    ul: ({ children }) => (
-                      <ul className="list-disc list-inside ml-4">{children}</ul>
-                    ),
-                    ol: ({ children }) => (
-                      <ol className="list-decimal list-inside ml-4">{children}</ol>
-                    ),
-                    li: ({ children }) => <li className="mb-1">{children}</li>,
-                    blockquote: ({ children }) => (
-                      <blockquote className="border-l-4 border-blue-400 pl-4 italic text-gray-400">
-                        {children}
-                      </blockquote>
-                    ),
-                    pre: ({ children }) => (
-                      <div className="bg-[#1e1e2e] p-3 rounded-lg overflow-x-auto my-2">
-                        {children}
-                      </div>
-                    ),
-                    code: ({ className, children }) => {
-                      const match = /language-(\w+)/.exec(className || "");
-                      return match ? (
-                        <SyntaxHighlighter style={dracula} language={match[1]} PreTag="div">
-                          {String(children).replace(/\n$/, "")}
-                        </SyntaxHighlighter>
-                      ) : (
-                        <code className="bg-gray-800 px-2 py-1 rounded text-sm">{children}</code>
-                      );
-                    },
-                  }}
-                >
-                  {msg.text}
-                </ReactMarkdown>
-              </div>
+              <FaRobot className="text-3xl text-[#ffffff]" />
             </motion.div>
-          ))}
+            <h1 className="text-xl font-semibold tracking-wide text-white">Echo</h1>
+          </div>
 
-          {/* Echo is Typing Indicator */}
-          {typing && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{
-                duration: 0.5,
-                repeat: Infinity,
-                repeatType: "reverse",
-              }}
-              className="flex items-center gap-2 text-gray-400 italic self-start"
-            >
-              <div className="w-8 h-8 flex items-center justify-center rounded-full bg-[#3b82f6] text-white text-lg">
-                🤖
-              </div>
-              <div className="px-4 py-2 rounded-2xl shadow-lg max-w-fit bg-[#252532] text-gray-300">
-                Echo is typing...
-              </div>
-            </motion.div>
-          )}
-        </div>
-
-        {/* Chat Input Section */}
-        <div className="w-full mt-4 pb-2 flex items-center bg-[#252532] rounded-lg shadow-md border border-gray-600 px-3 py-2 min-h-[3rem] md:min-h-[4rem]">
-          <button
-            onClick={() => startVoiceRecognition(setInput, input)}
-            className="p-3 bg-gray-700 rounded-full mr-2 hover:bg-gray-600"
-          >
-            <FaMicrophone className="text-white" />
-          </button>
-          <input
-            ref={inputRef}
-            type="text"
-            className="flex-grow p-3 text-white bg-transparent outline-none text-base placeholder-gray-400"
-            placeholder="Type a message..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                sendMessage();
-              }
-            }}
-          />
+          {/* 🔥 Right-Aligned Minimalist New Chat Icon */}
           <motion.button
-            onClick={() => sendMessage()}
-            className="bg-purple-500 p-3 rounded-full shadow-md hover:scale-110"
+            onClick={createNewChat}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            className="p-2 rounded-md text-gray-300 hover:text-white transition-all"
           >
-            <FaPaperPlane className="text-lg text-white" />
+            <FiPlus size={18} />
           </motion.button>
         </div>
 
-        {/* Bottom Section - Personality Selector & Clear Chat */}
-        <div className="flex items-center w-full px-3 mt-4">
-          <div className="w-[30%] transform -translate-x-4">
-            <PersonalitySelector
-              personality={personality}
-              setPersonality={(newPersonality: string) => {
-                setPersonality(
-                  newPersonality as "Friendly" | "Funny" | "Professional" | "Supportive",
-                );
+        {/* 🔥 Chat List Title - Lowered for More Space */}
+        <h2 className="text-gray-400 text-sm font-medium uppercase tracking-wide px-2 mt-8 mb-4">
+          Recent Chats
+        </h2>
 
-                const personalityResponses: Record<string, string> = {
-                  Friendly:
-                    "😊 I'm feeling extra warm and welcoming! Let's have a fun, friendly chat with lots of positive vibes. 💙",
-                  Funny:
-                    "😂 Get ready for some jokes and witty comebacks! I'll keep the chat lighthearted and fun. 😆",
-                  Professional:
-                    "💼 I'm now in professional mode! Expect clear, concise, and informative responses—like a reliable assistant at your service. 📊",
-                  Supportive:
-                    "💙 I'm here to listen, encourage, and support you! Whatever you're going through, I'm here to help. 🤗",
-                };
+        {/* 🔥 Chat List - Shifted Left by Reducing Padding */}
+        <ul className="flex-grow space-y-2 px-2 overflow-y-auto pb-6">
+          {Object.entries(chats).map(([chatId, chat]) => (
+            <motion.li
+              key={chatId}
+              whileHover={{ scale: 1.02 }} // 🔥 Smooth Hover Effect
+              className={`flex justify-between items-center px-2 py-3 rounded-lg cursor-pointer font-medium transition-all
+          ${
+            chatId === currentChatId
+              ? "bg-gradient-to-r from-[#6a11cb] to-[#2575fc] text-white shadow-lg w-full rounded-2xl" // 🔥 Rounded & Smooth Active Chat
+              : "hover:bg-[#2d2f3a] text-gray-300 hover:text-white transition rounded-lg"
+          }`}
+            >
+              <span onClick={() => switchChat(chatId)} className="flex-1 truncate">
+                {chat.name}
+              </span>
 
-                if (personalityResponses[newPersonality as keyof typeof personalityResponses]) {
-                  setMessages((prev) => [
-                    ...prev,
-                    {
-                      sender: "Echo",
-                      text: `✨ You've switched to ${newPersonality} mode! ${
-                        personalityResponses[newPersonality as keyof typeof personalityResponses]
-                      }`,
-                    },
-                  ]);
+              {/* 🔥 Subtle Delete Icon */}
+              <motion.button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteChat(chatId);
+                }}
+                whileHover={{ scale: 1.2 }}
+                whileTap={{ scale: 0.9 }}
+                className="ml-2 p-1 rounded-full text-gray-400 hover:text-red-500 transition-opacity"
+              >
+                <FiTrash size={16} />
+              </motion.button>
+            </motion.li>
+          ))}
+        </ul>
+      </div>
+
+      {/* 🔥 Main Chat Section - Adjusted for Wider Sidebar */}
+      <div className="flex-grow flex flex-col items-center justify-center ml-64">
+        {/* 🔥 Dark Mode Toggle */}
+        <button
+          onClick={() => setDarkMode((prev) => !prev)}
+          className="fixed top-6 right-6 z-[60] bg-gray-800 p-1 rounded-full hover:bg-gray-700 transition shadow-lg"
+          style={{ transform: "translateY(15px)" }}
+        >
+          {darkMode ? (
+            <FaSun className="text-yellow-400 text-m" />
+          ) : (
+            <FaMoon className="text-gray-300 text-m" />
+          )}
+        </button>
+
+        {/* 🔥 Chatbox Wrapper */}
+        <div
+          className="flex flex-col flex-grow w-full max-w-5xl bg-custom bg-opacity-80 backdrop-blur-lg p-6 rounded-xl shadow-lg border border-purple-500/50 hover:border-purple-600 transition mx-auto mb-6"
+          style={{
+            minHeight: "60vh",
+            maxHeight: "80vh",
+            height: "calc(100vh - 10rem)",
+          }}
+        >
+          {/* 🔥 Chat Messages */}
+          <div
+            ref={chatContainerRef}
+            className="flex flex-col justify-start flex-grow overflow-y-auto space-y-3 p-3 scrollbar-thin scrollbar-track-[#1e1e2e] scrollbar-thumb-[#6a11cb] scrollbar-thumb-rounded-full w-full"
+          >
+            {currentChatId &&
+              chats[currentChatId]?.messages.map((msg, index) => (
+                <motion.div
+                  key={index}
+                  className={`flex ${msg.sender === "You" ? "justify-end" : "justify-start"} mb-2`}
+                >
+                  <div
+                    className={`relative text-[15px] leading-relaxed shadow-md px-4 py-3 ${
+                      msg.sender === "You"
+                        ? "bg-gradient-to-r from-[#6a11cb] to-[#2575fc] text-white"
+                        : "bg-[#252532] text-gray-300"
+                    }`}
+                    style={{
+                      maxWidth: "70%",
+                      borderRadius:
+                        msg.sender === "You" ? "20px 20px 5px 20px" : "20px 20px 20px 5px",
+                    }}
+                  >
+                    <ReactMarkdown
+                      rehypePlugins={[rehypeRaw]}
+                      remarkPlugins={[remarkGfm, remarkBreaks]}
+                      components={{
+                        h1: ({ children }) => (
+                          <h1 className="text-lg font-bold mt-2">{children}</h1>
+                        ),
+                        h2: ({ children }) => (
+                          <h2 className="text-md font-semibold mt-2">{children}</h2>
+                        ),
+                        p: ({ children }) => <p className="mb-1">{children}</p>,
+                        ul: ({ children }) => (
+                          <ul className="list-disc list-inside ml-4">{children}</ul>
+                        ),
+                        ol: ({ children }) => (
+                          <ol className="list-decimal list-inside ml-4">{children}</ol>
+                        ),
+                        li: ({ children }) => <li className="mb-1">{children}</li>,
+                        blockquote: ({ children }) => (
+                          <blockquote className="border-l-4 border-blue-400 pl-4 italic text-gray-400">
+                            {children}
+                          </blockquote>
+                        ),
+                        pre: ({ children }) => (
+                          <div className="bg-[#1e1e2e] p-3 rounded-lg overflow-x-auto my-2">
+                            {children}
+                          </div>
+                        ),
+                        code: ({ className, children }) => {
+                          const match = /language-(\w+)/.exec(className || "");
+                          return match ? (
+                            <SyntaxHighlighter style={dracula} language={match[1]} PreTag="div">
+                              {String(children).replace(/\n$/, "")}
+                            </SyntaxHighlighter>
+                          ) : (
+                            <code className="bg-gray-800 px-2 py-1 rounded text-sm">
+                              {children}
+                            </code>
+                          );
+                        },
+                      }}
+                    >
+                      {msg.text}
+                    </ReactMarkdown>
+                  </div>
+                </motion.div>
+              ))}
+
+            {typing && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{
+                  duration: 0.5,
+                  repeat: Infinity,
+                  repeatType: "reverse",
+                }}
+                className="flex items-center gap-2 text-gray-400 italic self-start"
+              >
+                <div className="w-8 h-8 flex items-center justify-center rounded-full bg-[#3b82f6] text-white text-lg">
+                  🤖
+                </div>
+                <div className="px-4 py-2 rounded-2xl shadow-lg max-w-fit bg-[#252532] text-gray-300">
+                  Echo is typing...
+                </div>
+              </motion.div>
+            )}
+          </div>
+
+          {/* 🔥 Chat Input Section */}
+          <div className="w-full mt-4 pb-2 flex items-center bg-[#252532] rounded-lg shadow-md border border-gray-600 px-3 py-2 min-h-[3rem] md:min-h-[4rem]">
+            <button
+              onClick={() => startVoiceRecognition(setInput, input)}
+              className="p-3 bg-gray-700 rounded-full mr-2 hover:bg-gray-600"
+            >
+              <FaMicrophone className="text-white" />
+            </button>
+            <textarea
+              ref={inputRef}
+              className="flex-grow p-3 text-white bg-transparent outline-none text-base placeholder-gray-400 resize-none overflow-hidden"
+              placeholder="Type a message..."
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                if (inputRef.current) {
+                  inputRef.current.style.height = "auto";
+                  inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
                 }
               }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
+              rows={1}
             />
+            <motion.button
+              onClick={() => sendMessage()}
+              className="bg-purple-500 p-3 rounded-full shadow-md hover:scale-110"
+            >
+              <FaPaperPlane className="text-lg text-white" />
+            </motion.button>
           </div>
-          <motion.span
-            onClick={clearChat}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            className="text-xs text-gray-400 cursor-pointer opacity-80 hover:underline transition-all ml-auto"
-          >
-            Clear Chat
-          </motion.span>
+
+          {/* 🔥 Bottom Section - Personality Selector & Clear Chat */}
+          <div className="flex items-center w-full px-3 mt-4">
+            <div className="w-[30%] transform -translate-x-4">
+              <PersonalitySelector personality={personality} setPersonality={setPersonality} />
+            </div>
+            <motion.button
+              onClick={clearChat}
+              whileHover={{ textShadow: "0px 0px 8px rgba(255, 76, 76, 0.8)" }} // Subtle glow effect
+              whileTap={{ scale: 0.95 }}
+              className="ml-auto text-sm text-gray-400 hover:text-white transition-all underline"
+            >
+              Clear Chat
+            </motion.button>
+          </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
