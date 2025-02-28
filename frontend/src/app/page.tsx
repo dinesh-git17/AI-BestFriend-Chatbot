@@ -249,6 +249,9 @@ export default function Home() {
 
     localStorage.setItem("chats", JSON.stringify(updatedChats));
 
+    // ✅ Ensure chat title is generated regardless of cache usage
+    updateChatTitle(currentChatId);
+
     // ✅ Get the latest personality state
     const latestPersonality = personality;
     console.log(`🧠 Sending request with personality: ${latestPersonality}`);
@@ -355,6 +358,9 @@ export default function Home() {
       }));
 
       localStorage.setItem("chats", JSON.stringify(updatedChats));
+
+      // ✅ If the response was cached, still trigger title generation
+      updateChatTitle(currentChatId);
     } catch (error) {
       console.error("Error sending message:", error);
 
@@ -400,11 +406,8 @@ export default function Home() {
   // ✅ Create a new chat with smart naming
   const createNewChat = async () => {
     const newChatId = `chat-${Date.now()}`;
-    const fallbackName = "New Conversation"; // ✅ Fallback if API fails
-
-    // ✅ Placeholder name while fetching a title
     const newChat = {
-      name: "Generating name...",
+      name: "New Chat",
       messages: [
         {
           sender: "Echo",
@@ -413,7 +416,6 @@ export default function Home() {
       ],
     };
 
-    // ✅ Optimistically update UI with a new chat
     setChats((prevChats) => {
       const updatedChats = { ...prevChats, [newChatId]: newChat };
       localStorage.setItem("chats", JSON.stringify(updatedChats));
@@ -422,46 +424,37 @@ export default function Home() {
 
     setCurrentChatId(newChatId);
     localStorage.setItem("lastChatId", newChatId);
+  };
+
+  const updateChatTitle = async (chatId: string) => {
+    const chatMessages = chats[chatId]?.messages || [];
+    const userMessages = chatMessages.filter((msg) => msg.sender === "You").slice(0, 2);
+
+    if (userMessages.length < 2 || chats[chatId]?.name !== "New Chat") return;
 
     try {
-      // ✅ Call backend API to generate a smart chat title
       const response = await fetch(`${API_URL}/generate-chat-title/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: newChat.messages.slice(0, 3), // ✅ Send first few messages for context
-        }),
+        body: JSON.stringify({ messages: userMessages }),
       });
 
-      if (!response.ok) {
-        console.error("Chat title API error:", await response.text());
-        throw new Error("Failed to generate chat name");
-      }
+      if (!response.ok) throw new Error("Failed to generate chat title");
 
       const data = await response.json();
-      const chatTitle = data.title?.trim() || fallbackName; // ✅ Use API-generated title or fallback
+      const chatTitle = data.title?.trim() || "New Chat";
 
-      // ✅ Update chat name after fetching
-      setChats((prevChats) => {
-        const updatedChats = {
-          ...prevChats,
-          [newChatId]: { ...prevChats[newChatId], name: chatTitle },
-        };
-        localStorage.setItem("chats", JSON.stringify(updatedChats));
-        return updatedChats;
-      });
+      setChats((prevChats) => ({
+        ...prevChats,
+        [chatId]: { ...prevChats[chatId], name: chatTitle },
+      }));
+
+      localStorage.setItem(
+        "chats",
+        JSON.stringify({ ...chats, [chatId]: { ...chats[chatId], name: chatTitle } }),
+      );
     } catch (error) {
-      console.error("Error generating chat name:", error);
-
-      // ✅ Fallback: Update with default name
-      setChats((prevChats) => {
-        const updatedChats = {
-          ...prevChats,
-          [newChatId]: { ...prevChats[newChatId], name: fallbackName },
-        };
-        localStorage.setItem("chats", JSON.stringify(updatedChats));
-        return updatedChats;
-      });
+      console.error("Error updating chat title:", error);
     }
   };
 
@@ -478,7 +471,7 @@ export default function Home() {
       // ✅ If all chats are deleted, reset to Chat 1 with a welcome message
       const newChatId = "chat-1";
       updatedChats[newChatId] = {
-        name: "Chat 1",
+        name: "New Chat",
         messages: [
           {
             sender: "Echo",

@@ -134,54 +134,59 @@ async def chat(request: Request, user_id: str = Header(default=str(uuid.uuid4())
 @app.post("/generate-chat-title/")
 async def generate_chat_title(request: TitleRequest):
     try:
-        # ✅ Ensure OpenAI API Key is set
         if not OPENAI_API_KEY:
             raise HTTPException(status_code=500, detail="Missing OpenAI API Key.")
 
-        # ✅ Extract the messages to summarize
         messages = request.messages
         if not messages or len(messages) == 0:
             raise HTTPException(status_code=400, detail="No messages provided.")
 
+        # ✅ Filter only user messages
+        user_messages = [msg for msg in messages if msg.get("sender") == "You"]
+
+        # ✅ If fewer than 2 user messages, return default title
+        if len(user_messages) < 2:
+            return {"title": "New Chat"}
+
+        # ✅ Take the first two user messages for title generation
+        selected_messages = user_messages[:2]
+
         # ✅ Use Redis caching for title generation
-        chat_key = sanitize_key(f"chat_title:{hash(str(messages))}")
+        chat_key = sanitize_key(f"chat_title:{hash(str(selected_messages))}")
 
         if redis_client:
             cached_title = redis_client.get(chat_key)
             if cached_title:
                 return {"title": cached_title}
 
-        # ✅ Prepare system prompt for generating a title
         system_prompt = (
-            "Generate a short, relevant chat title based on the following messages. "
-            "Make it engaging and keep it under 5 words."
+            "Generate a short, engaging chat title based on the first two user messages. "
+            "Avoid generic titles and keep it under 5 words."
         )
 
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "system", "content": system_prompt}]
             + [
-                {"role": "user", "content": str(msg.get("text", ""))}
-                for msg in messages[:3]
-            ],  # ✅ Ensures correct message structure
+                {"role": "user", "content": msg.get("text", "")}
+                for msg in selected_messages
+            ],
             temperature=0.5,
             max_tokens=10,
-        )  # type: ignore  # ✅ Pylance will ignore type errors here
+        )
 
-        # ✅ Handle None case safely
         chat_title = (
             response.choices[0].message.content.strip()
             if response.choices[0].message.content
             else "New Chat"
         )
 
-        # ✅ Store the generated title in Redis for 24 hours
         if redis_client:
             redis_client.setex(chat_key, 86400, chat_title)
 
         return {"title": chat_title}
 
-    except openai.OpenAIError as e:  # ✅ FIXED OpenAI Exception Handling
+    except openai.OpenAIError as e:
         print("OpenAI API Error:", str(e))
         raise HTTPException(
             status_code=500, detail="⚠️ OpenAI API Error. Try again later."
