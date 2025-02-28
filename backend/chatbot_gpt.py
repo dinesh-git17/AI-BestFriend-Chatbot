@@ -65,6 +65,7 @@ class Chatbot:
             "- **Use conversational language that feels natural and warm.**\n"
             "- **Avoid overly technical jargon unless requested.**\n"
             "- **For sensitive topics, respond with empathy and care.** ❤️\n"
+            "- **Include emojis anywhere that would make the conversation more human.**\n"
         )
 
     async def get_response_stream(

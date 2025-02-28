@@ -11,6 +11,8 @@ import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { dracula } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 // Voice Recognition Support
 declare global {
@@ -381,63 +383,66 @@ export default function Home() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.9 }}
               transition={{ duration: 0.3, ease: "easeOut" }}
-              className={`flex gap-2 items-center ${
+              className={`flex gap-2 items-end ${
                 msg.sender === "You" ? "justify-end" : "justify-start"
               }`}
             >
-              {/* Edit & Delete Buttons for User Messages */}
-              {msg.sender === "You" && (
-                <div className="flex items-center gap-1 opacity-0 hover:opacity-100 transition-opacity duration-300">
-                  {editingMessageId === index.toString() ? (
-                    <motion.button
-                      onClick={() => handleSaveEdit(index)}
-                      whileHover={{ scale: 1.15 }}
-                      whileTap={{ scale: 0.9 }}
-                      className="p-1.5 rounded-lg transition duration-300"
-                    >
-                      <FiCheck
-                        className="text-gray-400 hover:text-green-400 transition duration-300"
-                        size={16}
-                      />
-                    </motion.button>
-                  ) : (
-                    <motion.button
-                      onClick={() => handleEditMessage(index)}
-                      whileHover={{ scale: 1.15 }}
-                      whileTap={{ scale: 0.9 }}
-                      className="p-1.5 rounded-lg transition duration-300"
-                    >
-                      <FiEdit
-                        className="text-gray-400 hover:text-yellow-400 transition duration-300"
-                        size={16}
-                      />
-                    </motion.button>
-                  )}
-                  <motion.button
-                    onClick={() => handleDeleteMessage(index)}
-                    whileHover={{ scale: 1.15 }}
-                    whileTap={{ scale: 0.9 }}
-                    className="p-1.5 rounded-lg transition duration-300"
-                  >
-                    <FiTrash
-                      className="text-gray-400 hover:text-red-400 transition duration-300"
-                      size={16}
-                    />
-                  </motion.button>
-                </div>
-              )}
-
-              {/* Message Bubble */}
+              {/* Chat Bubble */}
               <div
-                className={`px-4 py-3 rounded-2xl shadow-lg max-w-[75%] text-base leading-relaxed ${
-                  msg.sender === "You"
-                    ? "bg-gradient-to-r from-[#6a11cb] to-[#2575fc] text-white"
-                    : "bg-[#252532] text-gray-300 shadow-lg shadow-blue-500/10"
-                }`}
+                className={`relative px-5 py-4 rounded-2xl shadow-lg max-w-[70%] text-[15px] leading-relaxed 
+        ${
+          msg.sender === "You"
+            ? "bg-gradient-to-r from-[#6a11cb] to-[#2575fc] text-white shadow-blue-500/30"
+            : "bg-[#252532] text-gray-300 shadow-lg"
+        }
+      `}
+                style={{
+                  wordBreak: "break-word",
+                  borderRadius: "18px",
+                  padding: "12px 16px",
+                  boxShadow:
+                    msg.sender === "You"
+                      ? "0px 4px 12px rgba(102, 51, 153, 0.3)"
+                      : "0px 4px 12px rgba(0,0,0,0.2)",
+                }}
               >
                 <ReactMarkdown
                   rehypePlugins={[rehypeRaw]}
-                  remarkPlugins={[remarkGfm, remarkBreaks]} // ✅ Enables proper line breaks
+                  remarkPlugins={[remarkGfm, remarkBreaks]}
+                  components={{
+                    h1: ({ children }) => <h1 className="text-xl font-bold mt-2">{children}</h1>,
+                    h2: ({ children }) => (
+                      <h2 className="text-lg font-semibold mt-2">{children}</h2>
+                    ),
+                    p: ({ children }) => <p className="mb-2">{children}</p>,
+                    ul: ({ children }) => (
+                      <ul className="list-disc list-inside ml-4">{children}</ul>
+                    ),
+                    ol: ({ children }) => (
+                      <ol className="list-decimal list-inside ml-4">{children}</ol>
+                    ),
+                    li: ({ children }) => <li className="mb-1">{children}</li>,
+                    blockquote: ({ children }) => (
+                      <blockquote className="border-l-4 border-blue-400 pl-4 italic text-gray-400">
+                        {children}
+                      </blockquote>
+                    ),
+                    pre: ({ children }) => (
+                      <div className="bg-[#1e1e2e] p-3 rounded-lg overflow-x-auto my-2">
+                        {children}
+                      </div>
+                    ),
+                    code: ({ className, children }) => {
+                      const match = /language-(\w+)/.exec(className || "");
+                      return match ? (
+                        <SyntaxHighlighter style={dracula} language={match[1]} PreTag="div">
+                          {String(children).replace(/\n$/, "")}
+                        </SyntaxHighlighter>
+                      ) : (
+                        <code className="bg-gray-800 px-2 py-1 rounded text-sm">{children}</code>
+                      );
+                    },
+                  }}
                 >
                   {msg.text}
                 </ReactMarkdown>
