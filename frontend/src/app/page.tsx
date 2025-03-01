@@ -681,13 +681,14 @@ export default function Home() {
           )}
         </button>
 
-        {/* 🔥 Chatbox Wrapper */}
+        {/* 🔥 Chatbox Wrapper - Fullscreen Like ChatGPT with No Border */}
+        {/* 🔥 Chatbox Wrapper - Increased Bottom Height */}
         <div
-          className="flex flex-col flex-grow w-full max-w-5xl bg-custom bg-opacity-80 backdrop-blur-lg p-6 rounded-xl shadow-lg border border-purple-500/50 hover:border-purple-600 transition mx-auto mb-6"
+          className="flex flex-col flex-grow w-full h-full bg-custom bg-opacity-80 backdrop-blur-lg p-8 rounded-none shadow-lg transition"
           style={{
-            minHeight: "60vh",
-            maxHeight: "80vh",
-            height: "calc(100vh - 10rem)",
+            minHeight: "90vh", // ✅ Increased height
+            maxHeight: "95vh", // ✅ Allows chat to expand lower
+            height: "calc(100vh - 3rem)", // ✅ Extends chat downwards
           }}
         >
           {/* 🔥 Chat Messages */}
