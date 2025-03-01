@@ -576,48 +576,48 @@ export default function Home() {
           Recent Chats
         </h2>
 
-        {/* 🔥 Chat List - Shifted Left by Reducing Padding */}
-        <ul className="flex-grow space-y-2 px-2 overflow-y-auto pb-6">
+        {/* 🔥 Chat List */}
+        <ul className="flex-grow space-y-2 px-2 overflow-y-auto pb-6 relative z-[1]">
           {Object.entries(chats).map(([chatId, chat]) => (
             <motion.li
               key={chatId}
-              whileHover={{ scale: 1.02 }} // 🔥 Smooth Hover Effect
+              whileHover={dropdownOpen === chatId ? {} : { backgroundColor: "#2d2f3a" }} // ✅ No hover effect when dropdown is open
               className={`relative flex justify-between items-center px-2 py-3 rounded-lg cursor-pointer font-medium transition-all ${
                 chatId === currentChatId
                   ? "bg-gradient-to-r from-[#6a11cb] to-[#2575fc] text-white shadow-lg w-full rounded-2xl"
+                  : dropdownOpen === chatId
+                  ? "text-gray-300" // ✅ Stops hover color when dropdown is open
                   : "hover:bg-[#2d2f3a] text-gray-300 hover:text-white transition rounded-lg"
               }`}
+              onClick={(e) => {
+                if (!(e.target as HTMLElement).closest(".dropdown-menu")) {
+                  switchChat(chatId); // ✅ Prevents switching if clicking inside dropdown
+                }
+              }}
             >
+              {/* 🔥 Chat Name */}
               {renamingChatId === chatId ? (
                 <input
                   type="text"
                   value={newChatName}
                   onChange={(e) => setNewChatName(e.target.value)}
-                  onBlur={() => handleRenameChat(chatId)} // ✅ Rename on blur
+                  onBlur={() => handleRenameChat(chatId)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleRenameChat(chatId);
                     if (e.key === "Escape") setRenamingChatId(null);
                   }}
                   autoFocus
                   className="flex-1 bg-transparent text-white border border-gray-600 focus:border-blue-400 rounded-md px-2 py-1 outline-none transition-all w-full"
-                  style={{
-                    minWidth: "0", // ✅ Prevents wrapping issues
-                    overflow: "hidden", // ✅ Prevents unnecessary scrollbars
-                    textOverflow: "ellipsis", // ✅ Keeps text neatly inside
-                    whiteSpace: "nowrap", // ✅ Prevents multi-line expansion
-                  }}
                 />
               ) : (
-                <span onClick={() => switchChat(chatId)} className="flex-1 truncate px-2 py-1">
-                  {chat.name}
-                </span>
+                <span className="flex-1 truncate px-2 py-1">{chat.name}</span>
               )}
 
-              {/* 🔥 Dropdown Menu Trigger (Three-Dot Button) */}
+              {/* 🔥 Dropdown Menu Trigger */}
               <div className="relative">
                 <motion.button
                   onClick={(e) => {
-                    e.stopPropagation();
+                    e.stopPropagation(); // ✅ Prevents chat switching
                     toggleDropdown(chatId);
                   }}
                   whileHover={{ scale: 1.1 }}
@@ -627,29 +627,36 @@ export default function Home() {
                   •••
                 </motion.button>
 
-                {/* 🔥 Dropdown Menu */}
+                {/* 🔥 Floating Dropdown - Now Above Hover Effect */}
                 {dropdownOpen === chatId && (
-                  <div className="absolute right-0 top-8 w-32 bg-[#1e1e2e] rounded-lg shadow-lg z-50 border border-gray-700 dropdown-menu">
+                  <div
+                    className="absolute right-0 top-full mt-2 w-36 bg-[#1e1e2e]/90 backdrop-blur-md rounded-xl shadow-xl border border-gray-700 dropdown-menu"
+                    style={{
+                      pointerEvents: "auto", // ✅ Ensures dropdown is interactive
+                      zIndex: 10000, // ✅ Forces dropdown to be on top
+                      position: "absolute",
+                    }}
+                    onClick={(e) => e.stopPropagation()} // ✅ Prevents unintended interactions
+                  >
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
+                      onClick={() => {
                         setRenamingChatId(chatId);
                         setNewChatName(chats[chatId].name);
                         setDropdownOpen(null);
                       }}
-                      className="w-full px-3 py-2 text-left text-gray-300 hover:bg-[#343541] hover:text-white transition"
+                      className="w-full px-4 py-2 text-left text-gray-300 hover:bg-[#343541] hover:text-white transition flex items-center gap-2"
                     >
-                      Rename
+                      ✏️ Rename
                     </button>
 
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
+                      onClick={() => {
                         deleteChat(chatId);
+                        setDropdownOpen(null);
                       }}
-                      className="w-full px-3 py-2 text-left text-red-400 hover:bg-[#343541] hover:text-white transition"
+                      className="w-full px-4 py-2 text-left text-red-400 hover:bg-[#343541] hover:text-white transition flex items-center gap-2"
                     >
-                      Delete
+                      🗑️ Delete
                     </button>
                   </div>
                 )}
