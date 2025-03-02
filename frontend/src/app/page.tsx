@@ -433,8 +433,11 @@ export default function Home() {
   };
 
   // ✅ Create a new chat with smart naming
+  const chatFetchedRef = useRef(false); // ✅ Prevent multiple fetches
+  const chatCreatedRef = useRef(false); // ✅ Prevent multiple chat creations
+
   const createNewChat = useCallback(async () => {
-    if (!user) return;
+    if (!user || chatCreatedRef.current) return; // ✅ Ensure only ONE chat is created
 
     console.log("🆕 Creating a new chat...");
 
@@ -455,12 +458,15 @@ export default function Home() {
       const newChatId = data[0].id;
       setChats((prevChats) => ({ ...prevChats, [newChatId]: newChat }));
       setCurrentChatId(newChatId);
+      chatCreatedRef.current = true; // ✅ Prevent duplicate creation
     }
-  }, [user, setChats, setCurrentChatId]); // ✅ Now stable
+  }, [user]); // ✅ Now stable
 
-  // ✅ Fetch chats when user logs in
+  // ✅ Fetch chats ONCE when user logs in
   useEffect(() => {
-    if (!user) return;
+    if (!user || chatFetchedRef.current) return; // ✅ Prevent multiple fetches
+
+    chatFetchedRef.current = true; // ✅ Mark that fetch has happened
 
     const fetchChats = async () => {
       console.log("🔍 Fetching chats for user:", user.id);
@@ -483,14 +489,15 @@ export default function Home() {
         );
         setChats(chatsData);
         setCurrentChatId(data[0].id);
-      } else {
+      } else if (!chatCreatedRef.current) {
         console.log("⚠️ No chats found. Creating new chat...");
-        createNewChat();
+        chatCreatedRef.current = true; // ✅ Prevent multiple chat creations
+        await createNewChat(); // ✅ Only create one chat
       }
     };
 
     fetchChats();
-  }, [user, createNewChat]); // ✅ No more ESLint warning
+  }, [user, createNewChat]); // ✅ Now safe to include `createNewChat`
 
   const updateChatTitle = async (chatId: string) => {
     if (!user) return;
@@ -573,13 +580,17 @@ export default function Home() {
     setCurrentChatId(chatId);
 
     // ✅ Store last active chat in Supabase for persistence
+    console.log("Updating last_chat_id for user:", user.id, "with chatId:", chatId);
+
     const { error } = await supabase
-      .from("users") // Assuming you have a `users` table
+      .from("users")
       .update({ last_chat_id: chatId })
-      .eq("id", user.id);
+      .eq("id", user.id)
+      .select() // Ensure the row exists
+      .single(); // Enforce a single-row update
 
     if (error) {
-      console.error("Error updating lastChatId in Supabase:", error);
+      console.error("Error updating lastChatId in Supabase:", error.message || error);
     }
   };
 
@@ -681,7 +692,10 @@ export default function Home() {
 
           {/* 🔥 Right-Aligned Minimalist New Chat Icon */}
           <motion.button
-            onClick={createNewChat}
+            onClick={() => {
+              chatCreatedRef.current = false; // ✅ Allow manual chat creation
+              createNewChat();
+            }}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
             className="p-2 rounded-md text-gray-300 hover:text-white transition-all"
