@@ -522,13 +522,13 @@ export default function Home() {
       // ✅ Store updated title in Supabase
       const { error } = await supabase
         .from("chats")
-        .update({ name: chatTitle })
-        .eq("id", chatId)
-        .eq("user_id", user.id);
+        .update({ last_chat_id: chatId }) // ✅ Update the correct table
+        .eq("user_id", user.id); // ✅ Ensure it updates the correct user
 
       if (error) {
-        console.error("Error updating chat title in Supabase:", error);
-        return;
+        console.error("Error updating lastChatId in Supabase:", error.message || error);
+      } else {
+        console.log("✅ Successfully updated lastChatId:", chatId);
       }
 
       // ✅ Update local state with new title
@@ -580,17 +580,19 @@ export default function Home() {
     setCurrentChatId(chatId);
 
     // ✅ Store last active chat in Supabase for persistence
-    console.log("Updating last_chat_id for user:", user.id, "with chatId:", chatId);
+    console.log("🔍 Updating lastChatId for user:", user?.id, "with chatId:", chatId);
 
-    const { error } = await supabase
-      .from("users")
-      .update({ last_chat_id: chatId })
-      .eq("id", user.id)
-      .select() // Ensure the row exists
-      .single(); // Enforce a single-row update
+    const { data, error } = await supabase
+      .from("chats")
+      .update({ last_chat_id: chatId }) // ✅ Correctly updating the last_chat_id field
+      .eq("id", chatId) // ✅ Ensure it updates the correct chat
+      .eq("user_id", user?.id) // ✅ Ensure it only updates chats belonging to this user
+      .select(); // ✅ Fetch the updated row for debugging
 
     if (error) {
-      console.error("Error updating lastChatId in Supabase:", error.message || error);
+      console.error("❌ Error updating lastChatId in Supabase:", error.message || error);
+    } else {
+      console.log("✅ Successfully updated lastChatId:", data);
     }
   };
 
