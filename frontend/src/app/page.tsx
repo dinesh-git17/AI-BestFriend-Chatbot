@@ -14,9 +14,9 @@ import remarkBreaks from "remark-breaks";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { dracula } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
 import { User } from "@supabase/auth-helpers-nextjs";
 import Image from "next/image";
+import { supabase } from "../lib/supabaseClient";
 
 // Voice Recognition Support
 declare global {
