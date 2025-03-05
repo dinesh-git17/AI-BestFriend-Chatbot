@@ -87,15 +87,39 @@ export default function Home() {
     };
   }, []);
 
+  // useEffect(() => {
+  //   if (!loading) {
+  //     if (user) {
+  //       router.replace("/"); // ✅ Redirect only if user is authenticated
+  //     } else {
+  //       router.replace("/auth/login"); // ✅ Redirect only if NOT logged in
+  //     }
+  //   }
+  // }, [loading, user, router]);
+
   useEffect(() => {
-    if (!loading) {
-      if (user) {
-        router.replace("/"); // ✅ Redirect only if user is authenticated
-      } else {
-        router.replace("/auth/login"); // ✅ Redirect only if NOT logged in
+    const checkAuth = async () => {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error("Error fetching session:", error);
       }
-    }
-  }, [loading, user, router]);
+
+      setUser(data.session?.user || null);
+      setLoading(false); // ✅ Only update loading after checking auth
+    };
+
+    checkAuth();
+
+    // ✅ Listen for auth state changes
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe(); // ✅ Cleanup on unmount
+    };
+  }, []);
+
   const [messages, setMessages] = useState<{ sender: string; text: string }[]>([]); // ✅ Default to empty array
 
   const [isMobile, setIsMobile] = useState(false);
@@ -438,67 +462,112 @@ export default function Home() {
   const chatCreatedRef = useRef(false); // ✅ Prevent multiple chat creations
 
   const createNewChat = useCallback(async () => {
-    if (!user || chatCreatedRef.current) return; // ✅ Ensure only ONE chat is created
+    if (chatCreatedRef.current) return; // ✅ Prevent multiple chat creations
+    chatCreatedRef.current = true; // ✅ Mark chat as created
 
     console.log("🆕 Creating a new chat...");
 
-    const newChat = {
-      user_id: user.id,
+    // ✅ Explicitly define type
+    const newChat: {
+      name: string;
+      messages: { sender: string; text: string }[];
+      user_id?: string; // ✅ Optional for guests
+    } = {
       name: "New Chat",
       messages: [{ sender: "Echo", text: "Hi there! 😊 I'm **Echo**, your AI best friend." }],
     };
 
-    const { data, error } = await supabase.from("chats").insert([newChat]).select();
+    if (user) {
+      // ✅ Add user_id for logged-in users
+      newChat.user_id = user.id;
 
-    if (error) {
-      console.error("❌ Error creating chat:", error);
-      return;
-    }
-
-    if (data) {
-      const newChatId = data[0].id;
-      setChats((prevChats) => ({ ...prevChats, [newChatId]: newChat }));
-      setCurrentChatId(newChatId);
-      chatCreatedRef.current = true; // ✅ Prevent duplicate creation
-    }
-  }, [user]); // ✅ Now stable
-
-  // ✅ Fetch chats ONCE when user logs in
-  useEffect(() => {
-    if (!user || chatFetchedRef.current) return; // ✅ Prevent multiple fetches
-
-    chatFetchedRef.current = true; // ✅ Mark that fetch has happened
-
-    const fetchChats = async () => {
-      console.log("🔍 Fetching chats for user:", user.id);
-
-      const { data, error } = await supabase
-        .from("chats")
-        .select("id, name, messages")
-        .eq("user_id", user.id);
+      const { data, error } = await supabase.from("chats").insert([newChat]).select();
 
       if (error) {
-        console.error("❌ Error fetching chats:", error.message);
+        console.error("❌ Error creating chat:", error);
         return;
       }
 
-      console.log("✅ Fetched chats:", data);
+      if (data) {
+        const newChatId = data[0].id;
+        setChats((prevChats) => ({ ...prevChats, [newChatId]: newChat }));
+        setCurrentChatId(newChatId);
+      }
+    } else {
+      // ✅ Store guest chats in localStorage
+      const guestChats = JSON.parse(localStorage.getItem("guestChats") || "{}");
+      const newChatId = `guest-${Date.now()}`; // Unique ID for guest chats
+      guestChats[newChatId] = newChat;
 
-      if (data.length > 0) {
-        const chatsData = Object.fromEntries(
-          data.map((chat) => [chat.id, { name: chat.name, messages: chat.messages }]),
-        );
-        setChats(chatsData);
-        setCurrentChatId(data[0].id);
-      } else if (!chatCreatedRef.current) {
-        console.log("⚠️ No chats found. Creating new chat...");
-        chatCreatedRef.current = true; // ✅ Prevent multiple chat creations
-        await createNewChat(); // ✅ Only create one chat
+      localStorage.setItem("guestChats", JSON.stringify(guestChats));
+      setChats(guestChats);
+      setCurrentChatId(newChatId);
+    }
+  }, [user]); // ✅ Works for guests and logged-in users
+
+  useEffect(() => {
+    if (chatFetchedRef.current) return; // ✅ Prevent multiple fetches
+    chatFetchedRef.current = true; // ✅ Mark that fetch has happened
+
+    const fetchChats = async () => {
+      if (user) {
+        console.log("🔍 Fetching chats for user:", user.id);
+
+        // ✅ Fetch the last selected chat from the user's profile
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles") // ✅ Ensure this matches your database schema
+          .select("last_chat_id")
+          .eq("id", user.id)
+          .single();
+
+        if (profileError) {
+          console.error("❌ Error fetching profile:", profileError.message);
+        }
+
+        const { data: chatData, error: chatError } = await supabase
+          .from("chats")
+          .select("id, name, messages")
+          .eq("user_id", user.id);
+
+        if (chatError) {
+          console.error("❌ Error fetching chats:", chatError.message);
+          return;
+        }
+
+        console.log("✅ Fetched chats:", chatData);
+
+        if (chatData.length > 0) {
+          const chatsData = Object.fromEntries(
+            chatData.map((chat) => [chat.id, { name: chat.name, messages: chat.messages }]),
+          );
+          setChats(chatsData);
+
+          // ✅ Use last_chat_id from the profile if available, otherwise use first chat
+          const lastChatId = profileData?.last_chat_id || chatData[0].id;
+          setCurrentChatId(lastChatId);
+        } else {
+          console.log("⚠️ No chats found. Creating a new chat...");
+          await createNewChat();
+        }
+      } else {
+        console.log("👤 Guest detected. Fetching chats from local storage...");
+
+        const guestChats = JSON.parse(localStorage.getItem("guestChats") || "{}");
+        if (Object.keys(guestChats).length > 0) {
+          setChats(guestChats);
+
+          // ✅ Load last selected chat for guest
+          const lastGuestChatId = localStorage.getItem("lastGuestChatId");
+          setCurrentChatId(lastGuestChatId || Object.keys(guestChats)[0]);
+        } else {
+          console.log("⚠️ No chats found. Creating a new guest chat...");
+          await createNewChat();
+        }
       }
     };
 
     fetchChats();
-  }, [user, createNewChat]); // ✅ Now safe to include `createNewChat`
+  }, [user, createNewChat]); // ✅ Runs regardless of login state
 
   const updateChatTitle = async (chatId: string) => {
     if (!user) return;
@@ -576,47 +645,65 @@ export default function Home() {
   }, [user, createNewChat]); // ✅ Runs when user logs in
 
   const switchChat = async (chatId: string) => {
-    if (!user || chatId === currentChatId) return; // ✅ Prevent redundant updates
-
+    if (chatId === currentChatId) return; // ✅ Prevent redundant updates
     setCurrentChatId(chatId);
 
-    // ✅ Store last active chat in Supabase for persistence
-    console.log("🔍 Updating lastChatId for user:", user?.id, "with chatId:", chatId);
+    if (user) {
+      // ✅ Store last active chat in the user's profile (not chats)
+      console.log("🔍 Updating last_chat_id in profile for user:", user.id, "with chatId:", chatId);
 
-    const { data, error } = await supabase
-      .from("chats")
-      .update({ last_chat_id: chatId }) // ✅ Correctly updating the last_chat_id field
-      .eq("id", chatId) // ✅ Ensure it updates the correct chat
-      .eq("user_id", user?.id) // ✅ Ensure it only updates chats belonging to this user
-      .select(); // ✅ Fetch the updated row for debugging
+      const { error } = await supabase
+        .from("profiles") // ✅ Ensure this matches your database schema
+        .update({ last_chat_id: chatId })
+        .eq("id", user.id);
 
-    if (error) {
-      console.error("❌ Error updating lastChatId in Supabase:", error.message || error);
+      if (error) {
+        console.error("❌ Error updating last_chat_id in Supabase:", error.message || error);
+      } else {
+        console.log("✅ Successfully updated last_chat_id:", chatId);
+      }
     } else {
-      console.log("✅ Successfully updated lastChatId:", data);
+      // ✅ Store last active chat in localStorage for guests
+      console.log("👤 Storing last active chat for guest:", chatId);
+      localStorage.setItem("lastGuestChatId", chatId);
     }
   };
 
   const deleteChat = async (chatId: string) => {
-    if (!user) return;
+    if (user) {
+      // ✅ Delete chat from Supabase for logged-in users
+      const { error } = await supabase
+        .from("chats")
+        .delete()
+        .eq("id", chatId)
+        .eq("user_id", user.id);
 
-    const { error } = await supabase.from("chats").delete().eq("id", chatId).eq("user_id", user.id);
-
-    if (error) {
-      console.error("Error deleting chat:", error);
-      return;
+      if (error) {
+        console.error("❌ Error deleting chat from Supabase:", error);
+        return;
+      }
+    } else {
+      // ✅ Delete chat from localStorage for guests
+      console.log("👤 Deleting chat for guest:", chatId);
+      const guestChats = JSON.parse(localStorage.getItem("guestChats") || "{}");
+      delete guestChats[chatId];
+      localStorage.setItem("guestChats", JSON.stringify(guestChats));
     }
 
+    // ✅ Update state
     setChats((prevChats) => {
       const updatedChats = { ...prevChats };
       delete updatedChats[chatId];
       return updatedChats;
     });
 
-    if (Object.keys(chats).length === 0) {
-      createNewChat();
+    // ✅ Handle case where the deleted chat was the active chat
+    const remainingChats = Object.keys(chats).filter((id) => id !== chatId);
+    if (remainingChats.length > 0) {
+      setCurrentChatId(remainingChats[0]); // ✅ Switch to the first remaining chat
     } else {
-      setCurrentChatId(Object.keys(chats)[0]);
+      console.log("⚠️ No chats left. Creating a new chat...");
+      await createNewChat();
     }
   };
 
@@ -657,14 +744,39 @@ export default function Home() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [profilePic, setProfilePic] = useState<string | null>(null);
 
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (user) {
       setProfilePic(user?.user_metadata?.avatar_url || null);
     }
   }, [user]);
 
-  if (loading || (!loading && user === null)) {
-    return <div className="w-full h-screen bg-[#0F0F1A]"></div>; // ✅ Smooth transition
+  // ✅ Close dropdown if clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      setProfilePic(user?.user_metadata?.avatar_url || null);
+    }
+  }, [user]);
+
+  // if (loading || (!loading && user === null)) {
+  //   return <div className="w-full h-screen bg-[#0F0F1A]"></div>; // ✅ Smooth transition
+  // }
+
+  if (loading) {
+    return (
+      <div className="w-full h-screen flex justify-center items-center text-white">Loading...</div>
+    );
   }
 
   return isMobile ? (
@@ -814,36 +926,48 @@ export default function Home() {
 
       {/* 🔥 Main Chat Section - Adjusted for Wider Sidebar */}
       <div className="flex-grow flex flex-col items-center justify-center ml-64">
-        {/* 🔥 User Profile Icon at Top Right Like ChatGPT */}
-        <div className="absolute top-4 right-4 z-[60] ml-auto mr-4">
-          <button
-            onClick={() => setIsDropdownOpen((prev) => !prev)}
-            className="hover:opacity-80 transition-opacity"
-          >
-            {profilePic ? (
-              <Image
-                src={profilePic}
-                alt="User Avatar"
-                width={35}
-                height={35}
-                className="rounded-full border border-gray-500"
-                priority
-              />
-            ) : (
-              <FaUserCircle className="text-white text-sm" />
-            )}
-          </button>
-
-          {/* 🔥 Dropdown Menu Positioned Below User Icon */}
-          {isDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-40 bg-[#1e1e2e]/90 backdrop-blur-md rounded-lg shadow-xl border border-gray-700">
+        {/* 🔥 User Profile Icon / Login Button */}
+        <div className="absolute top-4 right-4 z-[60]" ref={dropdownRef}>
+          {user ? (
+            // ✅ Show user avatar & logout when logged in
+            <>
               <button
-                onClick={handleLogout}
-                className="w-full px-4 py-2 text-left text-red-400 hover:bg-[#343541] hover:text-white transition flex items-center gap-2"
+                onClick={() => setIsDropdownOpen((prev) => !prev)}
+                className="hover:opacity-80 transition-opacity"
               >
-                🚪 Logout
+                {profilePic ? (
+                  <Image
+                    src={profilePic}
+                    alt="User Avatar"
+                    width={28}
+                    height={28}
+                    className="rounded-full border border-gray-500"
+                    priority
+                  />
+                ) : (
+                  <FaUserCircle className="text-white text-sm" />
+                )}
               </button>
-            </div>
+
+              {isDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-40 bg-[#1e1e2e]/90 backdrop-blur-md rounded-lg shadow-xl border border-gray-700">
+                  <button
+                    onClick={handleLogout}
+                    className="w-full px-4 py-2 text-left text-red-400 hover:bg-[#343541] hover:text-white transition flex items-center gap-2"
+                  >
+                    🚪 Logout
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            // ✅ Show login button when not logged in
+            <button
+              onClick={() => router.push("/auth/login")}
+              className="px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg shadow-md hover:bg-blue-600 transition-all"
+            >
+              Log In
+            </button>
           )}
         </div>
 
