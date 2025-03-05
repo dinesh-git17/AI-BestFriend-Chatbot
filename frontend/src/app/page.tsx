@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic"; // Ensure SSR for dynamic updates
 import { useState, useEffect, useRef, useCallback } from "react";
 import PersonalitySelector from "@/components/PersonalitySelector";
 import { motion } from "framer-motion";
-import { FaPaperPlane, FaRobot, FaMicrophone, FaUserCircle } from "react-icons/fa";
+import { FaPaperPlane, FaRobot, FaMicrophone, FaUserCircle, FaUserAstronaut } from "react-icons/fa";
 import { FiPlus } from "react-icons/fi";
 import MobileChat from "@/components/MobileChat";
 import ReactMarkdown from "react-markdown";
@@ -213,13 +213,31 @@ export default function Home() {
     inputRef.current?.focus();
   }, []);
 
-  // Auto-scroll to latest message smoothly
+  const scrollToBottom = () => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  };
+
+  // Auto-scroll when messages update
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Auto-scroll when switching chats
+  useEffect(() => {
+    scrollToBottom();
+  }, [currentChatId]);
+
+  // Auto-scroll on page load for all chats
+  useEffect(() => {
+    setTimeout(scrollToBottom, 200); // Small delay to ensure full rendering
+  }, [chats]);
+
+  // Ensure new messages always scroll down
   useEffect(() => {
     if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTo({
-        top: chatContainerRef.current.scrollHeight,
-        behavior: "smooth",
-      });
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages.length]);
 
@@ -769,9 +787,8 @@ export default function Home() {
 
   // ✅ State to store user profile pic
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [profilePic, setProfilePic] = useState<string | null>(null);
-
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [profilePic, setProfilePic] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -795,10 +812,6 @@ export default function Home() {
       setProfilePic(user?.user_metadata?.avatar_url || null);
     }
   }, [user]);
-
-  // if (loading || (!loading && user === null)) {
-  //   return <div className="w-full h-screen bg-[#0F0F1A]"></div>; // ✅ Smooth transition
-  // }
 
   if (loading) {
     return (
@@ -829,7 +842,7 @@ export default function Home() {
   ) : (
     <div className="relative w-full h-screen flex bg-[#0F0F1A] text-white font-poppins">
       {/* 🔥 Sidebar - Adjusted for Proper Chat List Positioning */}
-      <div className="fixed left-0 top-0 w-64 h-screen bg-[#15151e] px-3 pt-4 pb-5 shadow-lg z-40 overflow-y-auto border-r border-gray-700 flex flex-col">
+      <div className="fixed left-0 top-0 w-64 h-screen backdrop-blur-lg bg-black/50 px-3 pt-4 pb-5 shadow-lg z-40 overflow-y-auto border-r border-gray-700 flex flex-col rounded-r-xl transition-all">
         {/* 🔥 Branding - Properly Adjusted */}
         <div className="flex items-center justify-between px-2 py-3">
           <div className="flex items-center gap-3">
@@ -867,12 +880,10 @@ export default function Home() {
             <motion.li
               key={chatId}
               whileHover={dropdownOpen === chatId ? {} : { backgroundColor: "#2d2f3a" }} // ✅ No hover effect when dropdown is open
-              className={`relative flex justify-between items-center px-2 py-3 rounded-lg cursor-pointer font-medium transition-all ${
+              className={`relative flex justify-between items-center px-3 py-3 rounded-xl cursor-pointer font-medium transition-all ${
                 chatId === currentChatId
                   ? "bg-gradient-to-r from-[#6a11cb] to-[#2575fc] text-white shadow-lg w-full rounded-2xl"
-                  : dropdownOpen === chatId
-                  ? "text-gray-300" // ✅ Stops hover color when dropdown is open
-                  : "hover:bg-[#2d2f3a] text-gray-300 hover:text-white transition rounded-lg"
+                  : "bg-gray-800/50 hover:bg-gray-700/60 text-gray-300 hover:text-white transition rounded-xl"
               }`}
               onClick={(e) => {
                 if (!(e.target as HTMLElement).closest(".dropdown-menu")) {
@@ -1009,6 +1020,7 @@ export default function Home() {
           <div
             ref={chatContainerRef}
             className="flex flex-col justify-start flex-grow overflow-y-auto space-y-3 p-3"
+            style={{ maxHeight: "calc(100vh - 100px)", paddingBottom: "120px" }}
           >
             {currentChatId &&
               (chats[currentChatId]?.messages || []).map((msg, index) => (
@@ -1017,16 +1029,11 @@ export default function Home() {
                   className={`flex ${msg.sender === "You" ? "justify-end" : "justify-start"} mb-2`}
                 >
                   <div
-                    className={`relative text-[15px] leading-relaxed shadow-md px-4 py-3 ${
+                    className={`relative text-[15px] leading-relaxed shadow-xl px-4 py-2 ${
                       msg.sender === "You"
-                        ? "bg-gradient-to-r from-[#6a11cb] to-[#2575fc] text-white"
-                        : "bg-[#252532] text-gray-300"
+                        ? "bg-gradient-to-br from-blue-500 to-indigo-500 text-white rounded-2xl shadow-lg shadow-blue-900/40 inline-block max-w-[60%]"
+                        : "bg-gray-800/50 border border-gray-600 text-gray-200 rounded-2xl shadow-md inline-block max-w-[60%]"
                     }`}
-                    style={{
-                      maxWidth: "70%",
-                      borderRadius:
-                        msg.sender === "You" ? "20px 20px 5px 20px" : "20px 20px 20px 5px",
-                    }}
                   >
                     <ReactMarkdown
                       rehypePlugins={[rehypeRaw]}
@@ -1097,19 +1104,37 @@ export default function Home() {
             )}
           </div>
 
-          {/* 🔥 Chat Input Section */}
-          <div className="w-full mt-4 pb-2 flex items-center bg-[#252532] rounded-lg shadow-md border border-gray-600 px-3 py-2 min-h-[3rem] md:min-h-[4rem]">
+          {/* 🔥 Chat Input Section - Modernized 💜 */}
+          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 w-[70%] max-w-3xl flex items-center px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-full shadow-lg focus-within:ring-2 focus-within:ring-blue-500 transition-all z-10">
+            {/* Personality Selector inside Input Box */}
+            {/* Personality Selector inside Input Box */}
+            <div className="relative group mr-2">
+              {/* 🎭 Icon Button */}
+              <button className="p-2 rounded-full bg-gray-700 hover:bg-gray-600 transition">
+                {/* <span className="text-white text-lg">🎭</span>{" "} */}
+                {/* Alternatively, use an icon below */}
+                <FaUserAstronaut className="text-white text-lg" />
+              </button>
+
+              {/* Personality Selector Dropdown (Hidden by default, shows on hover) */}
+              {/* Personality Selector Dropdown (Hidden by default, shows on hover) */}
+              <div className="absolute bottom-full mb-2 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
+                <PersonalitySelector personality={personality} setPersonality={setPersonality} />
+              </div>
+            </div>
+            {/* Microphone Button */}
             <button
               onClick={() => startVoiceRecognition(setInput, input)}
-              className="p-3 bg-gray-700 rounded-full mr-2 hover:bg-gray-600"
+              className="p-3 bg-gray-700 rounded-full hover:bg-gray-600 transition-transform hover:scale-110"
             >
               <FaMicrophone className="text-white" />
             </button>
+            {/* Input Field */}
             <textarea
               ref={inputRef}
               className="flex-grow p-3 text-white bg-transparent outline-none text-base placeholder-gray-400 resize-none overflow-hidden"
               placeholder="Type a message..."
-              value={input || ""} // ✅ Ensures it is never `undefined`
+              value={input || ""}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -1117,29 +1142,17 @@ export default function Home() {
                   sendMessage();
                 }
               }}
+              autoFocus
               rows={1}
             />
-
+            {/* Send Button */}
             <motion.button
               onClick={() => sendMessage()}
-              className="bg-purple-500 p-3 rounded-full shadow-md hover:scale-110"
+              whileHover={{ scale: 1.1, boxShadow: "0px 0px 10px rgba(255, 255, 255, 0.4)" }}
+              whileTap={{ scale: 0.95 }}
+              className="bg-gradient-to-br from-blue-500 to-indigo-500 p-3 rounded-full shadow-md transition-transform"
             >
               <FaPaperPlane className="text-lg text-white" />
-            </motion.button>
-          </div>
-
-          {/* 🔥 Bottom Section - Personality Selector & Clear Chat */}
-          <div className="flex items-center w-full px-3 mt-4">
-            <div className="w-[30%] transform -translate-x-4">
-              <PersonalitySelector personality={personality} setPersonality={setPersonality} />
-            </div>
-            <motion.button
-              onClick={clearChat}
-              whileHover={{ textShadow: "0px 0px 8px rgba(255, 76, 76, 0.8)" }} // Subtle glow effect
-              whileTap={{ scale: 0.95 }}
-              className="ml-auto text-sm text-gray-400 hover:text-white transition-all underline"
-            >
-              Clear Chat
             </motion.button>
           </div>
         </div>
