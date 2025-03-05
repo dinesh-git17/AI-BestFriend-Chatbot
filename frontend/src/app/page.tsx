@@ -1,10 +1,10 @@
 "use client";
 export const dynamic = "force-dynamic"; // Ensure SSR for dynamic updates
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import PersonalitySelector from "@/components/PersonalitySelector";
 import { motion } from "framer-motion";
-import { FaPaperPlane, FaRobot, FaMicrophone, FaSun, FaMoon } from "react-icons/fa";
+import { FaPaperPlane, FaRobot, FaMicrophone, FaUserCircle } from "react-icons/fa";
 import { FiPlus } from "react-icons/fi";
 import MobileChat from "@/components/MobileChat";
 import ReactMarkdown from "react-markdown";
@@ -13,6 +13,10 @@ import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { dracula } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { useRouter } from "next/navigation";
+import { User } from "@supabase/auth-helpers-nextjs";
+import Image from "next/image";
+import { supabase } from "../lib/supabaseClient";
 
 // Voice Recognition Support
 declare global {
@@ -51,7 +55,48 @@ declare global {
 }
 
 export default function Home() {
-  const [messages, setMessages] = useState<{ sender: string; text: string }[]>([]);
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.replace("/auth/login"); // Redirect to login page after logout
+  };
+
+  const router = useRouter();
+  const [loading, setLoading] = useState(true); // ✅ Track auth check state
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error("Error fetching session:", error);
+      }
+
+      setUser(data.session?.user || null);
+      setLoading(false);
+    };
+
+    checkAuth();
+
+    // ✅ Listen for auth state changes to keep session updated
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe(); // ✅ Cleanup listener on unmount
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      if (user) {
+        router.replace("/"); // ✅ Redirect only if user is authenticated
+      } else {
+        router.replace("/auth/login"); // ✅ Redirect only if NOT logged in
+      }
+    }
+  }, [loading, user, router]);
+  const [messages, setMessages] = useState<{ sender: string; text: string }[]>([]); // ✅ Default to empty array
 
   const [isMobile, setIsMobile] = useState(false);
 
@@ -110,26 +155,7 @@ export default function Home() {
     return hour < 12 ? "Good morning!" : hour < 18 ? "Good afternoon!" : "Good evening!";
   };
 
-  // Ensure localStorage is only accessed on the client
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("chatHistory");
-
-      setMessages(
-        saved
-          ? JSON.parse(saved)
-          : [
-              {
-                sender: "Echo",
-                text: `## 👋 Welcome to Echo!\n\nHi there! 😊 I'm **Echo**, your AI best friend. I'm here to chat, listen, and support you anytime. 💙\n\nHow can I help you today?`,
-              },
-            ],
-      );
-    }
-  }, []);
-
   const [input, setInput] = useState("");
-  const [darkMode, setDarkMode] = useState(true);
   const [personality, setPersonality] = useState("Friendly");
   const chatContainerRef = useRef<HTMLDivElement>(null); // ✅ Add error state for network errors
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -151,6 +177,7 @@ export default function Home() {
   const [chats, setChats] = useState<{
     [key: string]: { name: string; messages: { sender: string; text: string }[] };
   }>({});
+
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -159,23 +186,6 @@ export default function Home() {
 
   useEffect(() => {
     inputRef.current?.focus();
-  }, []);
-
-  // ✅ Load chats from localStorage on startup
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedChats = localStorage.getItem("chats");
-      if (savedChats) {
-        setChats(JSON.parse(savedChats));
-      }
-
-      const lastChat = localStorage.getItem("lastChatId");
-      if (lastChat && JSON.parse(savedChats || "{}")[lastChat]) {
-        setCurrentChatId(lastChat);
-      } else {
-        createNewChat();
-      }
-    }
   }, []);
 
   // Auto-scroll to latest message smoothly
@@ -195,13 +205,6 @@ export default function Home() {
     }
   }, [messages]);
 
-  // Toggle dark mode
-  useEffect(() => {
-    if (typeof document !== "undefined") {
-      document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
-    }
-  }, [darkMode]);
-
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -220,7 +223,7 @@ export default function Home() {
   }, [dropdownOpen]);
 
   const sendMessage = async (presetText?: string) => {
-    if (!currentChatId) return;
+    if (!user || !currentChatId) return;
 
     const textToSend = presetText || input.trim();
     if (!textToSend) return;
@@ -230,16 +233,17 @@ export default function Home() {
     setTyping(true); // ✅ Show "Echo is typing..." before fetching
 
     // ✅ Add message to the current chat
-    const updatedChats = {
-      ...chats,
-      [currentChatId]: {
-        ...chats[currentChatId],
-        messages: [...(chats[currentChatId]?.messages || []), { sender: "You", text: textToSend }],
-      },
-    };
+    const updatedMessages = [
+      ...(chats[currentChatId]?.messages || []),
+      { sender: "You", text: textToSend },
+    ];
 
-    setChats(updatedChats);
-    setInput("");
+    // ✅ Update state immediately for smooth UI
+    setChats((prevChats) => ({
+      ...prevChats,
+      [currentChatId]: { ...prevChats[currentChatId], messages: updatedMessages },
+    }));
+
     setTyping(true);
 
     // ✅ Reset textarea height after sending
@@ -247,9 +251,7 @@ export default function Home() {
       inputRef.current.style.height = "auto";
     }
 
-    localStorage.setItem("chats", JSON.stringify(updatedChats));
-
-    // ✅ Ensure chat title is generated regardless of cache usage
+    // ✅ Ensure chat title is generated
     updateChatTitle(currentChatId);
 
     // ✅ Get the latest personality state
@@ -269,15 +271,22 @@ export default function Home() {
         text: "I'm Echo! Your friendly AI best friend. 😊",
       };
 
+      // ✅ Store this response in Supabase
+      await supabase
+        .from("chats")
+        .update({ messages: [...updatedMessages, responseMessage] })
+        .eq("id", currentChatId)
+        .eq("user_id", user.id);
+
+      // ✅ Update local state
       setChats((prevChats) => ({
         ...prevChats,
         [currentChatId]: {
           ...prevChats[currentChatId],
-          messages: [...prevChats[currentChatId].messages, responseMessage],
+          messages: [...updatedMessages, responseMessage],
         },
       }));
 
-      localStorage.setItem("chats", JSON.stringify(updatedChats));
       return;
     }
 
@@ -294,15 +303,19 @@ export default function Home() {
           text: "⚠️ No internet connection. Please check your network.",
         };
 
+        await supabase
+          .from("chats")
+          .update({ messages: [...updatedMessages, offlineMessage] })
+          .eq("id", currentChatId)
+          .eq("user_id", user.id);
+
         setChats((prevChats) => ({
           ...prevChats,
           [currentChatId]: {
             ...prevChats[currentChatId],
-            messages: [...prevChats[currentChatId].messages, offlineMessage],
+            messages: [...updatedMessages, offlineMessage],
           },
         }));
-
-        localStorage.setItem("chats", JSON.stringify(updatedChats));
       }
       return;
     }
@@ -319,15 +332,19 @@ export default function Home() {
           text: "⚠️ Server is not responding. Try again later.",
         };
 
+        supabase
+          .from("chats")
+          .update({ messages: [...updatedMessages, timeoutMessage] })
+          .eq("id", currentChatId)
+          .eq("user_id", user.id);
+
         setChats((prevChats) => ({
           ...prevChats,
           [currentChatId]: {
             ...prevChats[currentChatId],
-            messages: [...prevChats[currentChatId].messages, timeoutMessage],
+            messages: [...updatedMessages, timeoutMessage],
           },
         }));
-
-        localStorage.setItem("chats", JSON.stringify(updatedChats));
       }
     }, 30000); // ✅ Faster timeout (30 seconds)
 
@@ -349,17 +366,24 @@ export default function Home() {
 
       // ✅ Add AI response to the correct chat
       const responseMessage = { sender: "Echo", text: data.response };
+
+      // ✅ Store AI Response in Supabase
+      await supabase
+        .from("chats")
+        .update({ messages: [...updatedMessages, responseMessage] })
+        .eq("id", currentChatId)
+        .eq("user_id", user.id);
+
+      // ✅ Update local state
       setChats((prevChats) => ({
         ...prevChats,
         [currentChatId]: {
           ...prevChats[currentChatId],
-          messages: [...prevChats[currentChatId].messages, responseMessage],
+          messages: [...updatedMessages, responseMessage],
         },
       }));
 
-      localStorage.setItem("chats", JSON.stringify(updatedChats));
-
-      // ✅ If the response was cached, still trigger title generation
+      // ✅ Ensure chat title is updated
       updateChatTitle(currentChatId);
     } catch (error) {
       console.error("Error sending message:", error);
@@ -368,15 +392,21 @@ export default function Home() {
       if (!alreadyHasError && !timeoutTriggered) {
         const errorMessage = { sender: "Echo", text: "⚠️ Unable to connect. Please try again." };
 
+        // ✅ Store error in Supabase
+        await supabase
+          .from("chats")
+          .update({ messages: [...updatedMessages, errorMessage] })
+          .eq("id", currentChatId)
+          .eq("user_id", user.id);
+
+        // ✅ Update local state
         setChats((prevChats) => ({
           ...prevChats,
           [currentChatId]: {
             ...prevChats[currentChatId],
-            messages: [...prevChats[currentChatId].messages, errorMessage],
+            messages: [...updatedMessages, errorMessage],
           },
         }));
-
-        localStorage.setItem("chats", JSON.stringify(updatedChats));
       }
 
       clearTimeout(timeout);
@@ -404,29 +434,75 @@ export default function Home() {
   };
 
   // ✅ Create a new chat with smart naming
-  const createNewChat = async () => {
-    const newChatId = `chat-${Date.now()}`;
+  const chatFetchedRef = useRef(false); // ✅ Prevent multiple fetches
+  const chatCreatedRef = useRef(false); // ✅ Prevent multiple chat creations
+
+  const createNewChat = useCallback(async () => {
+    if (!user || chatCreatedRef.current) return; // ✅ Ensure only ONE chat is created
+
+    console.log("🆕 Creating a new chat...");
+
     const newChat = {
+      user_id: user.id,
       name: "New Chat",
-      messages: [
-        {
-          sender: "Echo",
-          text: `## Hi there! 😊 I'm **Echo**, your AI best friend.\n\n I'm here to chat, listen, and support you anytime. 💙\n\nHow can I help you today?`,
-        },
-      ],
+      messages: [{ sender: "Echo", text: "Hi there! 😊 I'm **Echo**, your AI best friend." }],
     };
 
-    setChats((prevChats) => {
-      const updatedChats = { ...prevChats, [newChatId]: newChat };
-      localStorage.setItem("chats", JSON.stringify(updatedChats));
-      return updatedChats;
-    });
+    const { data, error } = await supabase.from("chats").insert([newChat]).select();
 
-    setCurrentChatId(newChatId);
-    localStorage.setItem("lastChatId", newChatId);
-  };
+    if (error) {
+      console.error("❌ Error creating chat:", error);
+      return;
+    }
+
+    if (data) {
+      const newChatId = data[0].id;
+      setChats((prevChats) => ({ ...prevChats, [newChatId]: newChat }));
+      setCurrentChatId(newChatId);
+      chatCreatedRef.current = true; // ✅ Prevent duplicate creation
+    }
+  }, [user]); // ✅ Now stable
+
+  // ✅ Fetch chats ONCE when user logs in
+  useEffect(() => {
+    if (!user || chatFetchedRef.current) return; // ✅ Prevent multiple fetches
+
+    chatFetchedRef.current = true; // ✅ Mark that fetch has happened
+
+    const fetchChats = async () => {
+      console.log("🔍 Fetching chats for user:", user.id);
+
+      const { data, error } = await supabase
+        .from("chats")
+        .select("id, name, messages")
+        .eq("user_id", user.id);
+
+      if (error) {
+        console.error("❌ Error fetching chats:", error.message);
+        return;
+      }
+
+      console.log("✅ Fetched chats:", data);
+
+      if (data.length > 0) {
+        const chatsData = Object.fromEntries(
+          data.map((chat) => [chat.id, { name: chat.name, messages: chat.messages }]),
+        );
+        setChats(chatsData);
+        setCurrentChatId(data[0].id);
+      } else if (!chatCreatedRef.current) {
+        console.log("⚠️ No chats found. Creating new chat...");
+        chatCreatedRef.current = true; // ✅ Prevent multiple chat creations
+        await createNewChat(); // ✅ Only create one chat
+      }
+    };
+
+    fetchChats();
+  }, [user, createNewChat]); // ✅ Now safe to include `createNewChat`
 
   const updateChatTitle = async (chatId: string) => {
+    if (!user) return;
+
     const chatMessages = chats[chatId]?.messages || [];
     const userMessages = chatMessages.filter((msg) => msg.sender === "You").slice(0, 2);
 
@@ -444,51 +520,104 @@ export default function Home() {
       const data = await response.json();
       const chatTitle = data.title?.trim() || "New Chat";
 
+      // ✅ Store updated title in Supabase
+      const { error } = await supabase
+        .from("chats")
+        .update({ last_chat_id: chatId }) // ✅ Update the correct table
+        .eq("user_id", user.id); // ✅ Ensure it updates the correct user
+
+      if (error) {
+        console.error("Error updating lastChatId in Supabase:", error.message || error);
+      } else {
+        console.log("✅ Successfully updated lastChatId:", chatId);
+      }
+
+      // ✅ Update local state with new title
       setChats((prevChats) => ({
         ...prevChats,
         [chatId]: { ...prevChats[chatId], name: chatTitle },
       }));
-
-      localStorage.setItem(
-        "chats",
-        JSON.stringify({ ...chats, [chatId]: { ...chats[chatId], name: chatTitle } }),
-      );
     } catch (error) {
       console.error("Error updating chat title:", error);
     }
   };
 
-  const switchChat = (chatId: string) => {
+  useEffect(() => {
+    if (!user) return; // Ensure user is available
+
+    const fetchChats = async () => {
+      console.log("🔍 Fetching chats for user:", user.id);
+
+      const { data, error } = await supabase
+        .from("chats")
+        .select("id, name, messages")
+        .eq("user_id", user.id);
+
+      if (error) {
+        console.error("❌ Error fetching chats:", error.message);
+        return;
+      }
+
+      console.log("✅ Fetched chats:", data);
+
+      if (data.length > 0) {
+        const chatsData = Object.fromEntries(
+          data.map((chat) => [chat.id, { name: chat.name, messages: chat.messages }]),
+        );
+        setChats(chatsData);
+        setCurrentChatId(data[0].id); // Set first chat as default
+      } else {
+        console.log("⚠️ No chats found. Creating new chat...");
+        createNewChat();
+      }
+    };
+
+    fetchChats();
+  }, [user, createNewChat]); // ✅ Runs when user logs in
+
+  const switchChat = async (chatId: string) => {
+    if (!user || chatId === currentChatId) return; // ✅ Prevent redundant updates
+
     setCurrentChatId(chatId);
-    localStorage.setItem("lastChatId", chatId);
+
+    // ✅ Store last active chat in Supabase for persistence
+    console.log("🔍 Updating lastChatId for user:", user?.id, "with chatId:", chatId);
+
+    const { data, error } = await supabase
+      .from("chats")
+      .update({ last_chat_id: chatId }) // ✅ Correctly updating the last_chat_id field
+      .eq("id", chatId) // ✅ Ensure it updates the correct chat
+      .eq("user_id", user?.id) // ✅ Ensure it only updates chats belonging to this user
+      .select(); // ✅ Fetch the updated row for debugging
+
+    if (error) {
+      console.error("❌ Error updating lastChatId in Supabase:", error.message || error);
+    } else {
+      console.log("✅ Successfully updated lastChatId:", data);
+    }
   };
 
-  const deleteChat = (chatId: string) => {
-    const updatedChats = { ...chats };
-    delete updatedChats[chatId];
+  const deleteChat = async (chatId: string) => {
+    if (!user) return;
 
-    if (Object.keys(updatedChats).length === 0) {
-      // ✅ If all chats are deleted, reset to Chat 1 with a welcome message
-      const newChatId = "chat-1";
-      updatedChats[newChatId] = {
-        name: "New Chat",
-        messages: [
-          {
-            sender: "Echo",
-            text: `## Hi there! 😊 I'm **Echo**, your AI best friend.\n\n I'm here to chat, listen, and support you anytime. 💙\n\nHow can I help you today?`,
-          },
-        ],
-      };
-      setCurrentChatId(newChatId);
-    } else {
-      // ✅ Ensure `setCurrentChatId` only receives a string
-      const firstChatId = Object.keys(updatedChats)[0] || "chat-1";
-      setCurrentChatId(firstChatId);
+    const { error } = await supabase.from("chats").delete().eq("id", chatId).eq("user_id", user.id);
+
+    if (error) {
+      console.error("Error deleting chat:", error);
+      return;
     }
 
-    setChats(updatedChats);
-    localStorage.setItem("chats", JSON.stringify(updatedChats));
-    localStorage.setItem("lastChatId", currentChatId || "chat-1"); // ✅ Ensure `string`
+    setChats((prevChats) => {
+      const updatedChats = { ...prevChats };
+      delete updatedChats[chatId];
+      return updatedChats;
+    });
+
+    if (Object.keys(chats).length === 0) {
+      createNewChat();
+    } else {
+      setCurrentChatId(Object.keys(chats)[0]);
+    }
   };
 
   const clearChat = () => {
@@ -523,6 +652,20 @@ export default function Home() {
     setRenamingChatId(null);
     localStorage.setItem("chats", JSON.stringify(updatedChats));
   };
+
+  // ✅ State to store user profile pic
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [profilePic, setProfilePic] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      setProfilePic(user?.user_metadata?.avatar_url || null);
+    }
+  }, [user]);
+
+  if (loading || (!loading && user === null)) {
+    return <div className="w-full h-screen bg-[#0F0F1A]"></div>; // ✅ Smooth transition
+  }
 
   return isMobile ? (
     <MobileChat
@@ -562,7 +705,10 @@ export default function Home() {
 
           {/* 🔥 Right-Aligned Minimalist New Chat Icon */}
           <motion.button
-            onClick={createNewChat}
+            onClick={() => {
+              chatCreatedRef.current = false; // ✅ Allow manual chat creation
+              createNewChat();
+            }}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
             className="p-2 rounded-md text-gray-300 hover:text-white transition-all"
@@ -668,36 +814,51 @@ export default function Home() {
 
       {/* 🔥 Main Chat Section - Adjusted for Wider Sidebar */}
       <div className="flex-grow flex flex-col items-center justify-center ml-64">
-        {/* 🔥 Dark Mode Toggle */}
-        <button
-          onClick={() => setDarkMode((prev) => !prev)}
-          className="fixed top-6 right-6 z-[60] bg-gray-800 p-1 rounded-full hover:bg-gray-700 transition shadow-lg"
-          style={{ transform: "translateY(15px)" }}
-        >
-          {darkMode ? (
-            <FaSun className="text-yellow-400 text-m" />
-          ) : (
-            <FaMoon className="text-gray-300 text-m" />
-          )}
-        </button>
+        {/* 🔥 User Profile Icon at Top Right Like ChatGPT */}
+        <div className="absolute top-4 right-4 z-[60] ml-auto mr-4">
+          <button
+            onClick={() => setIsDropdownOpen((prev) => !prev)}
+            className="hover:opacity-80 transition-opacity"
+          >
+            {profilePic ? (
+              <Image
+                src={profilePic}
+                alt="User Avatar"
+                width={35}
+                height={35}
+                className="rounded-full border border-gray-500"
+                priority
+              />
+            ) : (
+              <FaUserCircle className="text-white text-sm" />
+            )}
+          </button>
 
-        {/* 🔥 Chatbox Wrapper - Fullscreen Like ChatGPT with No Border */}
-        {/* 🔥 Chatbox Wrapper - Increased Bottom Height */}
+          {/* 🔥 Dropdown Menu Positioned Below User Icon */}
+          {isDropdownOpen && (
+            <div className="absolute right-0 mt-2 w-40 bg-[#1e1e2e]/90 backdrop-blur-md rounded-lg shadow-xl border border-gray-700">
+              <button
+                onClick={handleLogout}
+                className="w-full px-4 py-2 text-left text-red-400 hover:bg-[#343541] hover:text-white transition flex items-center gap-2"
+              >
+                🚪 Logout
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 🔥 Chatbox 💜 */}
         <div
           className="flex flex-col flex-grow w-full h-full bg-custom bg-opacity-80 backdrop-blur-lg p-8 rounded-none shadow-lg transition"
-          style={{
-            minHeight: "90vh", // ✅ Increased height
-            maxHeight: "95vh", // ✅ Allows chat to expand lower
-            height: "calc(100vh - 3rem)", // ✅ Extends chat downwards
-          }}
+          style={{ minHeight: "90vh", maxHeight: "95vh", height: "calc(100vh - 3rem)" }}
         >
-          {/* 🔥 Chat Messages */}
+          {/* 🔥 Chat Messages 💜 */}
           <div
             ref={chatContainerRef}
-            className="flex flex-col justify-start flex-grow overflow-y-auto space-y-3 p-3 scrollbar-thin scrollbar-track-[#1e1e2e] scrollbar-thumb-[#6a11cb] scrollbar-thumb-rounded-full w-full"
+            className="flex flex-col justify-start flex-grow overflow-y-auto space-y-3 p-3"
           >
             {currentChatId &&
-              chats[currentChatId]?.messages.map((msg, index) => (
+              (chats[currentChatId]?.messages || []).map((msg, index) => (
                 <motion.div
                   key={index}
                   className={`flex ${msg.sender === "You" ? "justify-end" : "justify-start"} mb-2`}
@@ -795,14 +956,8 @@ export default function Home() {
               ref={inputRef}
               className="flex-grow p-3 text-white bg-transparent outline-none text-base placeholder-gray-400 resize-none overflow-hidden"
               placeholder="Type a message..."
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                if (inputRef.current) {
-                  inputRef.current.style.height = "auto";
-                  inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
-                }
-              }}
+              value={input || ""} // ✅ Ensures it is never `undefined`
+              onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -811,6 +966,7 @@ export default function Home() {
               }}
               rows={1}
             />
+
             <motion.button
               onClick={() => sendMessage()}
               className="bg-purple-500 p-3 rounded-full shadow-md hover:scale-110"

@@ -42,7 +42,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://192.168.68.102:3000",
+        "http://localhost:3000",
         "https://ai-best-friend-chatbot.vercel.app",
     ],
     allow_credentials=True,
