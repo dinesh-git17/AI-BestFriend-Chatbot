@@ -57,8 +57,9 @@ declare global {
 export default function Home() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setUser(null); // ✅ Ensure user state is updated
-    router.replace("/"); // ✅ Redirect to chat page instead of login
+    setUser(null);
+    setDisplayName(null);
+    router.replace("/auth/login"); // ✅ Redirect to login page after logging out
   };
 
   const router = useRouter();
