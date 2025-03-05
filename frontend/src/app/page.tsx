@@ -57,7 +57,8 @@ declare global {
 export default function Home() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.replace("/auth/login"); // Redirect to login page after logout
+    setUser(null); // ✅ Ensure user state is updated
+    router.replace("/"); // ✅ Redirect to chat page instead of login
   };
 
   const router = useRouter();
@@ -247,7 +248,7 @@ export default function Home() {
   }, [dropdownOpen]);
 
   const sendMessage = async (presetText?: string) => {
-    if (!user || !currentChatId) return;
+    if (!currentChatId) return; // ✅ Ensure a chat exists before sending a message
 
     const textToSend = presetText || input.trim();
     if (!textToSend) return;
@@ -282,7 +283,7 @@ export default function Home() {
     const latestPersonality = personality;
     console.log(`🧠 Sending request with personality: ${latestPersonality}`);
 
-    // ✅ Check if the user is asking Echo's name
+    // ✅ Handle responses to "What is your name?"
     const lowerCaseText = textToSend.toLowerCase();
     if (
       lowerCaseText.includes("what is your name") ||
@@ -295,14 +296,17 @@ export default function Home() {
         text: "I'm Echo! Your friendly AI best friend. 😊",
       };
 
-      // ✅ Store this response in Supabase
-      await supabase
-        .from("chats")
-        .update({ messages: [...updatedMessages, responseMessage] })
-        .eq("id", currentChatId)
-        .eq("user_id", user.id);
+      // ✅ Store this response
+      if (user) {
+        await supabase
+          .from("chats")
+          .update({ messages: [...updatedMessages, responseMessage] })
+          .eq("id", currentChatId)
+          .eq("user_id", user.id);
+      } else {
+        console.log("👤 Guest chat in memory. Messages will disappear on refresh.");
+      }
 
-      // ✅ Update local state
       setChats((prevChats) => ({
         ...prevChats,
         [currentChatId]: {
@@ -318,7 +322,7 @@ export default function Home() {
     const lastMessage = chats[currentChatId]?.messages.slice(-1)[0]?.text || "";
     const alreadyHasError = lastMessage.includes("⚠️");
 
-    // ✅ Check if the user is offline and immediately show ONE error message
+    // ✅ Handle offline users
     if (!navigator.onLine) {
       setTyping(false);
       if (!alreadyHasError) {
@@ -327,11 +331,20 @@ export default function Home() {
           text: "⚠️ No internet connection. Please check your network.",
         };
 
-        await supabase
-          .from("chats")
-          .update({ messages: [...updatedMessages, offlineMessage] })
-          .eq("id", currentChatId)
-          .eq("user_id", user.id);
+        if (user) {
+          await supabase
+            .from("chats")
+            .update({ messages: [...updatedMessages, offlineMessage] })
+            .eq("id", currentChatId)
+            .eq("user_id", user.id);
+        } else {
+          const guestChats = JSON.parse(localStorage.getItem("guestChats") || "{}");
+          guestChats[currentChatId] = {
+            ...guestChats[currentChatId],
+            messages: [...updatedMessages, offlineMessage],
+          };
+          localStorage.setItem("guestChats", JSON.stringify(guestChats));
+        }
 
         setChats((prevChats) => ({
           ...prevChats,
@@ -356,11 +369,20 @@ export default function Home() {
           text: "⚠️ Server is not responding. Try again later.",
         };
 
-        supabase
-          .from("chats")
-          .update({ messages: [...updatedMessages, timeoutMessage] })
-          .eq("id", currentChatId)
-          .eq("user_id", user.id);
+        if (user) {
+          supabase
+            .from("chats")
+            .update({ messages: [...updatedMessages, timeoutMessage] })
+            .eq("id", currentChatId)
+            .eq("user_id", user.id);
+        } else {
+          const guestChats = JSON.parse(localStorage.getItem("guestChats") || "{}");
+          guestChats[currentChatId] = {
+            ...guestChats[currentChatId],
+            messages: [...updatedMessages, timeoutMessage],
+          };
+          localStorage.setItem("guestChats", JSON.stringify(guestChats));
+        }
 
         setChats((prevChats) => ({
           ...prevChats,
@@ -370,7 +392,7 @@ export default function Home() {
           },
         }));
       }
-    }, 30000); // ✅ Faster timeout (30 seconds)
+    }, 30000); // ✅ Timeout after 30 seconds
 
     try {
       const response = await fetch(`${API_URL}/chat/`, {
@@ -388,17 +410,24 @@ export default function Home() {
       const data = await response.json();
       setTyping(false);
 
-      // ✅ Add AI response to the correct chat
       const responseMessage = { sender: "Echo", text: data.response };
 
-      // ✅ Store AI Response in Supabase
-      await supabase
-        .from("chats")
-        .update({ messages: [...updatedMessages, responseMessage] })
-        .eq("id", currentChatId)
-        .eq("user_id", user.id);
+      // ✅ Store AI Response
+      if (user) {
+        await supabase
+          .from("chats")
+          .update({ messages: [...updatedMessages, responseMessage] })
+          .eq("id", currentChatId)
+          .eq("user_id", user.id);
+      } else {
+        const guestChats = JSON.parse(localStorage.getItem("guestChats") || "{}");
+        guestChats[currentChatId] = {
+          ...guestChats[currentChatId],
+          messages: [...updatedMessages, responseMessage],
+        };
+        localStorage.setItem("guestChats", JSON.stringify(guestChats));
+      }
 
-      // ✅ Update local state
       setChats((prevChats) => ({
         ...prevChats,
         [currentChatId]: {
@@ -407,23 +436,29 @@ export default function Home() {
         },
       }));
 
-      // ✅ Ensure chat title is updated
       updateChatTitle(currentChatId);
     } catch (error) {
       console.error("Error sending message:", error);
-
       setTyping(false);
+
       if (!alreadyHasError && !timeoutTriggered) {
         const errorMessage = { sender: "Echo", text: "⚠️ Unable to connect. Please try again." };
 
-        // ✅ Store error in Supabase
-        await supabase
-          .from("chats")
-          .update({ messages: [...updatedMessages, errorMessage] })
-          .eq("id", currentChatId)
-          .eq("user_id", user.id);
+        if (user) {
+          await supabase
+            .from("chats")
+            .update({ messages: [...updatedMessages, errorMessage] })
+            .eq("id", currentChatId)
+            .eq("user_id", user.id);
+        } else {
+          const guestChats = JSON.parse(localStorage.getItem("guestChats") || "{}");
+          guestChats[currentChatId] = {
+            ...guestChats[currentChatId],
+            messages: [...updatedMessages, errorMessage],
+          };
+          localStorage.setItem("guestChats", JSON.stringify(guestChats));
+        }
 
-        // ✅ Update local state
         setChats((prevChats) => ({
           ...prevChats,
           [currentChatId]: {
@@ -462,67 +497,65 @@ export default function Home() {
   const chatCreatedRef = useRef(false); // ✅ Prevent multiple chat creations
 
   const createNewChat = useCallback(async () => {
-    if (chatCreatedRef.current) return; // ✅ Prevent multiple chat creations
-    chatCreatedRef.current = true; // ✅ Mark chat as created
+    if (chatCreatedRef.current) return; // ✅ Prevent duplicate chat creation
+    chatCreatedRef.current = true; // ✅ Mark chat creation in progress
 
     console.log("🆕 Creating a new chat...");
 
-    // ✅ Explicitly define type
-    const newChat: {
-      name: string;
-      messages: { sender: string; text: string }[];
-      user_id?: string; // ✅ Optional for guests
-    } = {
+    const newChatId = user ? `user-${Date.now()}` : `guest-${Date.now()}`;
+
+    const newChat = {
       name: "New Chat",
       messages: [{ sender: "Echo", text: "Hi there! 😊 I'm **Echo**, your AI best friend." }],
+      user_id: user ? user.id : null, // ✅ Ensure user_id is included for logged-in users
     };
 
     if (user) {
-      // ✅ Add user_id for logged-in users
-      newChat.user_id = user.id;
+      try {
+        const { data, error } = await supabase.from("chats").insert([newChat]).select();
+        if (error) throw new Error(JSON.stringify(error, null, 2)); // ✅ Convert error to string for better logging
 
-      const { data, error } = await supabase.from("chats").insert([newChat]).select();
-
-      if (error) {
-        console.error("❌ Error creating chat:", error);
-        return;
-      }
-
-      if (data) {
-        const newChatId = data[0].id;
-        setChats((prevChats) => ({ ...prevChats, [newChatId]: newChat }));
-        setCurrentChatId(newChatId);
+        if (data && data.length > 0) {
+          const newChatId = data[0].id; // ✅ Use Supabase ID
+          setChats((prevChats) => ({ ...prevChats, [newChatId]: newChat }));
+          setCurrentChatId(newChatId);
+        }
+      } catch (error) {
+        if (error instanceof Error) {
+          console.error("❌ Error creating chat:", error.message);
+        } else {
+          console.error("❌ Unexpected error creating chat:", JSON.stringify(error, null, 2));
+        }
       }
     } else {
-      // ✅ Store guest chats in localStorage
-      const guestChats = JSON.parse(localStorage.getItem("guestChats") || "{}");
-      const newChatId = `guest-${Date.now()}`; // Unique ID for guest chats
-      guestChats[newChatId] = newChat;
+      let guestChats = JSON.parse(localStorage.getItem("guestChats") || "{}");
 
+      if (Object.keys(guestChats).length === 0) {
+        console.log("⚠️ No guest chats found. Creating a new one...");
+      } else {
+        console.log("✅ Guest already has chats. Allowing new chat creation.");
+      }
+
+      guestChats = { ...guestChats, [newChatId]: newChat };
       localStorage.setItem("guestChats", JSON.stringify(guestChats));
+
       setChats(guestChats);
       setCurrentChatId(newChatId);
+      localStorage.setItem("lastGuestChatId", newChatId);
     }
-  }, [user]); // ✅ Works for guests and logged-in users
+
+    setTimeout(() => {
+      chatCreatedRef.current = false; // ✅ Reset to allow new chats
+    }, 500);
+  }, [user]);
 
   useEffect(() => {
     if (chatFetchedRef.current) return; // ✅ Prevent multiple fetches
-    chatFetchedRef.current = true; // ✅ Mark that fetch has happened
+    chatFetchedRef.current = true; // ✅ Mark fetch as completed
 
     const fetchChats = async () => {
       if (user) {
         console.log("🔍 Fetching chats for user:", user.id);
-
-        // ✅ Fetch the last selected chat from the user's profile
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles") // ✅ Ensure this matches your database schema
-          .select("last_chat_id")
-          .eq("id", user.id)
-          .single();
-
-        if (profileError) {
-          console.error("❌ Error fetching profile:", profileError.message);
-        }
 
         const { data: chatData, error: chatError } = await supabase
           .from("chats")
@@ -534,40 +567,34 @@ export default function Home() {
           return;
         }
 
-        console.log("✅ Fetched chats:", chatData);
-
         if (chatData.length > 0) {
           const chatsData = Object.fromEntries(
             chatData.map((chat) => [chat.id, { name: chat.name, messages: chat.messages }]),
           );
           setChats(chatsData);
-
-          // ✅ Use last_chat_id from the profile if available, otherwise use first chat
-          const lastChatId = profileData?.last_chat_id || chatData[0].id;
-          setCurrentChatId(lastChatId);
+          setCurrentChatId(chatData[0].id);
         } else {
           console.log("⚠️ No chats found. Creating a new chat...");
-          await createNewChat();
+          createNewChat(); // ✅ Create a new chat only if no chats exist
         }
       } else {
-        console.log("👤 Guest detected. Fetching chats from local storage...");
+        console.log("👤 Guest detected. Checking localStorage for chats...");
 
-        const guestChats = JSON.parse(localStorage.getItem("guestChats") || "{}");
-        if (Object.keys(guestChats).length > 0) {
-          setChats(guestChats);
+        const storedChats = JSON.parse(localStorage.getItem("guestChats") || "{}");
+        const lastGuestChatId = localStorage.getItem("lastGuestChatId");
 
-          // ✅ Load last selected chat for guest
-          const lastGuestChatId = localStorage.getItem("lastGuestChatId");
-          setCurrentChatId(lastGuestChatId || Object.keys(guestChats)[0]);
+        if (Object.keys(storedChats).length > 0) {
+          setChats(storedChats);
+          setCurrentChatId(lastGuestChatId || Object.keys(storedChats)[0]);
         } else {
-          console.log("⚠️ No chats found. Creating a new guest chat...");
-          await createNewChat();
+          console.log("⚠️ No guest chats found. Creating a new one...");
+          createNewChat(); // ✅ Create a new chat only if none exist
         }
       }
     };
 
     fetchChats();
-  }, [user, createNewChat]); // ✅ Runs regardless of login state
+  }, [user, createNewChat]);
 
   const updateChatTitle = async (chatId: string) => {
     if (!user) return;
@@ -653,7 +680,7 @@ export default function Home() {
       console.log("🔍 Updating last_chat_id in profile for user:", user.id, "with chatId:", chatId);
 
       const { error } = await supabase
-        .from("profiles") // ✅ Ensure this matches your database schema
+        .from("chats") // ✅ Ensure this matches your database schema
         .update({ last_chat_id: chatId })
         .eq("id", user.id);
 
@@ -671,40 +698,40 @@ export default function Home() {
 
   const deleteChat = async (chatId: string) => {
     if (user) {
-      // ✅ Delete chat from Supabase for logged-in users
       const { error } = await supabase
         .from("chats")
         .delete()
         .eq("id", chatId)
         .eq("user_id", user.id);
-
       if (error) {
         console.error("❌ Error deleting chat from Supabase:", error);
         return;
       }
     } else {
-      // ✅ Delete chat from localStorage for guests
-      console.log("👤 Deleting chat for guest:", chatId);
+      console.log("👤 Guest chat deleted. Removing from localStorage...");
       const guestChats = JSON.parse(localStorage.getItem("guestChats") || "{}");
       delete guestChats[chatId];
       localStorage.setItem("guestChats", JSON.stringify(guestChats));
     }
 
-    // ✅ Update state
     setChats((prevChats) => {
       const updatedChats = { ...prevChats };
       delete updatedChats[chatId];
       return updatedChats;
     });
 
-    // ✅ Handle case where the deleted chat was the active chat
-    const remainingChats = Object.keys(chats).filter((id) => id !== chatId);
-    if (remainingChats.length > 0) {
-      setCurrentChatId(remainingChats[0]); // ✅ Switch to the first remaining chat
-    } else {
-      console.log("⚠️ No chats left. Creating a new chat...");
-      await createNewChat();
-    }
+    setTimeout(() => {
+      const remainingChats = Object.keys(chats).filter((id) => id !== chatId);
+
+      if (remainingChats.length > 0) {
+        setCurrentChatId(remainingChats[0]);
+        localStorage.setItem("lastGuestChatId", remainingChats[0]);
+      } else {
+        console.log("⚠️ No chats left. Ensuring new chat creation...");
+        chatCreatedRef.current = false; // ✅ Reset before calling createNewChat()
+        createNewChat();
+      }
+    }, 500);
   };
 
   const clearChat = () => {
@@ -962,12 +989,14 @@ export default function Home() {
             </>
           ) : (
             // ✅ Show login button when not logged in
-            <button
+            <motion.button
               onClick={() => router.push("/auth/login")}
-              className="px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg shadow-md hover:bg-blue-600 transition-all"
+              whileHover={{ scale: 1.05, boxShadow: "0px 0px 12px rgba(255, 255, 255, 0.2)" }}
+              whileTap={{ scale: 0.95 }}
+              className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-full shadow-md transition-all"
             >
               Log In
-            </button>
+            </motion.button>
           )}
         </div>
 
