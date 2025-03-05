@@ -64,6 +64,7 @@ export default function Home() {
   const router = useRouter();
   const [loading, setLoading] = useState(true); // ✅ Track auth check state
   const [user, setUser] = useState<User | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null); // ✅ Separate state for displayName
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -72,19 +73,33 @@ export default function Home() {
         console.error("Error fetching session:", error);
       }
 
-      setUser(data.session?.user || null);
+      const sessionUser = data.session?.user || null;
+      setUser(sessionUser);
       setLoading(false);
+
+      if (sessionUser) {
+        const displayName =
+          sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || "Anonymous";
+
+        setUser((prevUser) => (prevUser ? { ...prevUser, displayName } : null));
+      }
     };
 
     checkAuth();
 
-    // ✅ Listen for auth state changes to keep session updated
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
+      if (session?.user) {
+        const displayName =
+          session.user.user_metadata?.full_name || session.user.user_metadata?.name || "Anonymous";
+
+        setUser((prevUser) => (prevUser ? { ...prevUser, displayName } : null));
+      } else {
+        setUser(null);
+      }
     });
 
     return () => {
-      authListener.subscription.unsubscribe(); // ✅ Cleanup listener on unmount
+      authListener.subscription.unsubscribe();
     };
   }, []);
 
@@ -105,19 +120,37 @@ export default function Home() {
         console.error("Error fetching session:", error);
       }
 
-      setUser(data.session?.user || null);
-      setLoading(false); // ✅ Only update loading after checking auth
+      const sessionUser = data.session?.user || null;
+      setUser(sessionUser);
+
+      if (sessionUser) {
+        // ✅ Extract display name safely
+        const name =
+          sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || "Anonymous";
+        setDisplayName(name);
+      } else {
+        setDisplayName(null);
+      }
+
+      setLoading(false);
     };
 
     checkAuth();
 
-    // ✅ Listen for auth state changes
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
+      if (session?.user) {
+        const name =
+          session.user.user_metadata?.full_name || session.user.user_metadata?.name || "Anonymous";
+        setUser(session.user);
+        setDisplayName(name);
+      } else {
+        setUser(null);
+        setDisplayName(null);
+      }
     });
 
     return () => {
-      authListener.subscription.unsubscribe(); // ✅ Cleanup on unmount
+      authListener.subscription.unsubscribe();
     };
   }, []);
 
@@ -515,44 +548,45 @@ export default function Home() {
   const chatCreatedRef = useRef(false); // ✅ Prevent multiple chat creations
 
   const createNewChat = useCallback(async () => {
-    if (chatCreatedRef.current) return; // ✅ Prevent duplicate chat creation
-    chatCreatedRef.current = true; // ✅ Mark chat creation in progress
+    if (chatCreatedRef.current) return;
+    chatCreatedRef.current = true;
 
     console.log("🆕 Creating a new chat...");
 
     const newChatId = user ? `user-${Date.now()}` : `guest-${Date.now()}`;
+    const newChatName = "New Chat";
 
     const newChat = {
-      name: "New Chat",
+      name: newChatName,
+      display_name: newChatName,
       messages: [{ sender: "Echo", text: "Hi there! 😊 I'm **Echo**, your AI best friend." }],
-      user_id: user ? user.id : null, // ✅ Ensure user_id is included for logged-in users
+      user_id: user ? user.id : null,
+      user_display_name: displayName || "Anonymous", // ✅ Use separate displayName state
     };
 
     if (user) {
       try {
         const { data, error } = await supabase.from("chats").insert([newChat]).select();
-        if (error) throw new Error(JSON.stringify(error, null, 2)); // ✅ Convert error to string for better logging
+        if (error) throw new Error(JSON.stringify(error, null, 2));
 
         if (data && data.length > 0) {
-          const newChatId = data[0].id; // ✅ Use Supabase ID
-          setChats((prevChats) => ({ ...prevChats, [newChatId]: newChat }));
+          const newChatId = data[0].id;
+          setChats((prevChats) => ({
+            ...prevChats,
+            [newChatId]: {
+              name: newChatName,
+              display_name: newChatName,
+              messages: newChat.messages,
+              user_display_name: displayName, // ✅ Ensure displayName is stored correctly
+            },
+          }));
           setCurrentChatId(newChatId);
         }
       } catch (error) {
-        if (error instanceof Error) {
-          console.error("❌ Error creating chat:", error.message);
-        } else {
-          console.error("❌ Unexpected error creating chat:", JSON.stringify(error, null, 2));
-        }
+        console.error("❌ Error creating chat:", error);
       }
     } else {
       let guestChats = JSON.parse(localStorage.getItem("guestChats") || "{}");
-
-      if (Object.keys(guestChats).length === 0) {
-        console.log("⚠️ No guest chats found. Creating a new one...");
-      } else {
-        console.log("✅ Guest already has chats. Allowing new chat creation.");
-      }
 
       guestChats = { ...guestChats, [newChatId]: newChat };
       localStorage.setItem("guestChats", JSON.stringify(guestChats));
@@ -563,9 +597,9 @@ export default function Home() {
     }
 
     setTimeout(() => {
-      chatCreatedRef.current = false; // ✅ Reset to allow new chats
+      chatCreatedRef.current = false;
     }, 500);
-  }, [user]);
+  }, [user, displayName]); // ✅ Include displayName in dependencies
 
   useEffect(() => {
     if (chatFetchedRef.current) return; // ✅ Prevent multiple fetches
@@ -577,7 +611,7 @@ export default function Home() {
 
         const { data: chatData, error: chatError } = await supabase
           .from("chats")
-          .select("id, name, messages")
+          .select("id, name, display_name, messages, user_display_name")
           .eq("user_id", user.id);
 
         if (chatError) {
@@ -587,13 +621,21 @@ export default function Home() {
 
         if (chatData.length > 0) {
           const chatsData = Object.fromEntries(
-            chatData.map((chat) => [chat.id, { name: chat.name, messages: chat.messages }]),
+            chatData.map((chat) => [
+              chat.id,
+              {
+                name: chat.name,
+                display_name: chat.display_name,
+                messages: chat.messages,
+                user_display_name: chat.user_display_name || "Anonymous", // ✅ Fetch and store display name
+              },
+            ]),
           );
           setChats(chatsData);
           setCurrentChatId(chatData[0].id);
         } else {
           console.log("⚠️ No chats found. Creating a new chat...");
-          createNewChat(); // ✅ Create a new chat only if no chats exist
+          createNewChat();
         }
       } else {
         console.log("👤 Guest detected. Checking localStorage for chats...");
@@ -606,7 +648,7 @@ export default function Home() {
           setCurrentChatId(lastGuestChatId || Object.keys(storedChats)[0]);
         } else {
           console.log("⚠️ No guest chats found. Creating a new one...");
-          createNewChat(); // ✅ Create a new chat only if none exist
+          createNewChat();
         }
       }
     };
