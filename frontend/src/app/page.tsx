@@ -213,13 +213,31 @@ export default function Home() {
     inputRef.current?.focus();
   }, []);
 
-  // Auto-scroll to latest message smoothly
+  const scrollToBottom = () => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  };
+
+  // Auto-scroll when messages update
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Auto-scroll when switching chats
+  useEffect(() => {
+    scrollToBottom();
+  }, [currentChatId]);
+
+  // Auto-scroll on page load for all chats
+  useEffect(() => {
+    setTimeout(scrollToBottom, 200); // Small delay to ensure full rendering
+  }, [chats]);
+
+  // Ensure new messages always scroll down
   useEffect(() => {
     if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTo({
-        top: chatContainerRef.current.scrollHeight,
-        behavior: "smooth",
-      });
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages.length]);
 
@@ -1002,6 +1020,7 @@ export default function Home() {
           <div
             ref={chatContainerRef}
             className="flex flex-col justify-start flex-grow overflow-y-auto space-y-3 p-3"
+            style={{ maxHeight: "calc(100vh - 100px)", paddingBottom: "120px" }}
           >
             {currentChatId &&
               (chats[currentChatId]?.messages || []).map((msg, index) => (
@@ -1086,7 +1105,7 @@ export default function Home() {
           </div>
 
           {/* 🔥 Chat Input Section - Modernized 💜 */}
-          <div className="relative w-[70%] max-w-3xl mx-auto flex items-center px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-full shadow-lg focus-within:ring-2 focus-within:ring-blue-500 transition-all">
+          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 w-[70%] max-w-3xl flex items-center px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-full shadow-lg focus-within:ring-2 focus-within:ring-blue-500 transition-all z-10">
             {/* Personality Selector inside Input Box */}
             {/* Personality Selector inside Input Box */}
             <div className="relative group mr-2">
