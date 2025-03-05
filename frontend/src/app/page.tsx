@@ -1043,7 +1043,10 @@ export default function Home() {
           ) : (
             // ✅ Show login button when not logged in
             <motion.button
-              onClick={() => router.push("/auth/login")}
+              onClick={async () => {
+                await supabase.auth.signOut(); // ✅ Ensure previous session is cleared
+                router.push("/auth/login"); // ✅ Redirect user to login page
+              }}
               whileHover={{ scale: 1.05, boxShadow: "0px 0px 12px rgba(255, 255, 255, 0.2)" }}
               whileTap={{ scale: 0.95 }}
               className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-full shadow-md transition-all"
