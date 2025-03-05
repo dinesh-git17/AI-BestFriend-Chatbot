@@ -1,29 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 import { signUpWithEmail, signInWithEmail, signInWithOAuth } from "@/lib/auth";
 import { Mail, Lock } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { FaGithub } from "react-icons/fa";
 import { motion } from "framer-motion";
 import { Toaster, toast } from "react-hot-toast";
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
   const router = useRouter();
 
   useEffect(() => {
     const checkAuth = async () => {
       const { data } = await supabase.auth.getSession();
       if (data.session?.user) {
-        router.replace("/"); // ✅ Redirect if already logged in
+        router.replace("/"); // Redirect if already logged in
       }
     };
 
@@ -34,7 +32,6 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    // ✅ Check if already logged in
     const { data } = await supabase.auth.getSession();
     if (data.session?.user) {
       toast.error("You are already logged in!");
@@ -84,17 +81,16 @@ export default function LoginPage() {
     try {
       await signInWithOAuth(provider);
 
-      // ✅ Poll Supabase session to check if user is authenticated
       const checkSession = async () => {
         const { data } = await supabase.auth.getSession();
         if (data.session?.user) {
-          window.location.href = "/"; // ✅ Redirect after confirming login
+          window.location.href = "/";
         } else {
-          setTimeout(checkSession, 500); // ✅ Retry every 500ms until authenticated
+          setTimeout(checkSession, 500);
         }
       };
 
-      checkSession(); // Start checking session
+      checkSession();
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -109,42 +105,42 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-[#0F0F1A] text-white p-6">
+    <div className="flex flex-col items-center justify-center min-h-screen p-6 text-white bg-gradient-to-br from-[#0A0F1F] via-[#0B1321] to-[#020A14]">
       <Toaster position="top-right" reverseOrder={false} />
 
-      {/* Card Container */}
+      {/* Login Card */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3 }}
-        className="bg-[#15151e] p-8 rounded-lg shadow-lg w-full max-w-sm"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="relative bg-[#131823] bg-opacity-80 backdrop-blur-md p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-700"
       >
-        <h1 className="text-2xl font-semibold text-center mb-4">Welcome to Echo</h1>
+        <h1 className="text-3xl font-semibold text-center mb-6">Welcome to Echo</h1>
 
         {/* Error Message */}
         {error && <p className="text-red-400 mb-4 text-sm text-center">{error}</p>}
 
         {/* Email Input */}
-        <div className="relative mb-3">
-          <Mail className="absolute left-3 top-3 text-gray-400" size={20} />
+        <div className="relative mb-4">
+          <Mail className="absolute left-4 top-4 text-gray-400" size={20} />
           <input
             type="email"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full p-3 pl-10 rounded bg-[#252532] text-white outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full p-3 pl-12 rounded-lg bg-[#252532] text-white outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
         {/* Password Input */}
-        <div className="relative mb-3">
-          <Lock className="absolute left-3 top-3 text-gray-400" size={20} />
+        <div className="relative mb-4">
+          <Lock className="absolute left-4 top-4 text-gray-400" size={20} />
           <input
             type="password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full p-3 pl-10 rounded bg-[#252532] text-white outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full p-3 pl-12 rounded-lg bg-[#252532] text-white outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
@@ -152,7 +148,7 @@ export default function LoginPage() {
         <button
           onClick={handleLogin}
           disabled={loading}
-          className={`w-full p-3 rounded text-white transition ${
+          className={`w-full p-3 rounded-lg font-semibold transition ${
             loading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"
           }`}
         >
@@ -163,7 +159,7 @@ export default function LoginPage() {
         <button
           onClick={handleSignUp}
           disabled={loading}
-          className={`w-full p-3 rounded text-white mt-2 transition ${
+          className={`w-full p-3 rounded-lg font-semibold mt-3 transition ${
             loading ? "bg-green-400 cursor-not-allowed" : "bg-green-500 hover:bg-green-600"
           }`}
         >
@@ -171,26 +167,26 @@ export default function LoginPage() {
         </button>
 
         {/* Divider */}
-        <div className="flex items-center my-4">
+        <div className="flex items-center my-6">
           <div className="flex-grow border-t border-gray-600"></div>
-          <span className="mx-3 text-gray-400">or</span>
+          <span className="mx-4 text-gray-400">or</span>
           <div className="flex-grow border-t border-gray-600"></div>
         </div>
 
         {/* OAuth Buttons */}
         <button
           onClick={() => handleOAuthLogin("google")}
-          className="w-full p-3 bg-gray-200 hover:bg-gray-300 rounded text-black flex items-center justify-center gap-2 transition"
+          className="w-full p-3 bg-gray-200 hover:bg-gray-300 rounded-lg text-black flex items-center justify-center gap-2 transition font-semibold"
         >
-          <FcGoogle size={20} />
+          <FcGoogle size={24} />
           Sign in with Google
         </button>
 
         <button
           onClick={() => handleOAuthLogin("github")}
-          className="w-full p-3 bg-gray-800 hover:bg-gray-900 rounded text-white flex items-center justify-center gap-2 mt-2 transition"
+          className="w-full p-3 bg-gray-800 hover:bg-gray-900 rounded-lg text-white flex items-center justify-center gap-2 mt-3 transition font-semibold"
         >
-          <FaGithub size={20} />
+          <FaGithub size={24} />
           Sign in with GitHub
         </button>
       </motion.div>

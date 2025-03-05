@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic"; // Ensure SSR for dynamic updates
 import { useState, useEffect, useRef, useCallback } from "react";
 import PersonalitySelector from "@/components/PersonalitySelector";
 import { motion } from "framer-motion";
-import { FaPaperPlane, FaRobot, FaMicrophone } from "react-icons/fa";
+import { FaPaperPlane, FaRobot, FaMicrophone, FaUserCircle } from "react-icons/fa";
 import { FiPlus } from "react-icons/fi";
 import MobileChat from "@/components/MobileChat";
 import ReactMarkdown from "react-markdown";
@@ -16,6 +16,7 @@ import { dracula } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { User } from "@supabase/auth-helpers-nextjs";
+import Image from "next/image";
 
 // Voice Recognition Support
 declare global {
@@ -652,6 +653,16 @@ export default function Home() {
     localStorage.setItem("chats", JSON.stringify(updatedChats));
   };
 
+  // ✅ State to store user profile pic
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [profilePic, setProfilePic] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      setProfilePic(user?.user_metadata?.avatar_url || null);
+    }
+  }, [user]);
+
   if (loading || (!loading && user === null)) {
     return <div className="w-full h-screen bg-[#0F0F1A]"></div>; // ✅ Smooth transition
   }
@@ -803,13 +814,38 @@ export default function Home() {
 
       {/* 🔥 Main Chat Section - Adjusted for Wider Sidebar */}
       <div className="flex-grow flex flex-col items-center justify-center ml-64">
-        {/* 🔥 Logout Button */}
-        <button
-          onClick={handleLogout}
-          className="fixed top-6 right-6 z-[60] bg-red-500 px-4 py-2 rounded-md text-white font-semibold hover:bg-red-600 transition shadow-lg"
-        >
-          Logout
-        </button>
+        {/* 🔥 User Profile Icon at Top Right Like ChatGPT */}
+        <div className="absolute top-4 right-4 z-[60] ml-auto mr-4">
+          <button
+            onClick={() => setIsDropdownOpen((prev) => !prev)}
+            className="hover:opacity-80 transition-opacity"
+          >
+            {profilePic ? (
+              <Image
+                src={profilePic}
+                alt="User Avatar"
+                width={35}
+                height={35}
+                className="rounded-full border border-gray-500"
+                priority
+              />
+            ) : (
+              <FaUserCircle className="text-white text-sm" />
+            )}
+          </button>
+
+          {/* 🔥 Dropdown Menu Positioned Below User Icon */}
+          {isDropdownOpen && (
+            <div className="absolute right-0 mt-2 w-40 bg-[#1e1e2e]/90 backdrop-blur-md rounded-lg shadow-xl border border-gray-700">
+              <button
+                onClick={handleLogout}
+                className="w-full px-4 py-2 text-left text-red-400 hover:bg-[#343541] hover:text-white transition flex items-center gap-2"
+              >
+                🚪 Logout
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* 🔥 Chatbox 💜 */}
         <div
